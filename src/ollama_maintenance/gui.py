@@ -3,6 +3,8 @@ import sys
 import threading
 from pathlib import Path
 
+from . import __version__
+from .common import detect_ollama_version
 from .test_models import FAILURE_LOG
 from .test_models import OLLAMA_API_BASE_URL
 from .test_models import normalize_ollama_api_base_url
@@ -40,9 +42,13 @@ class OllamaMaintenanceApp:
         self.report_var = self.tk.StringVar(value=f"Report: {FAILURE_LOG.resolve()}")
         self.report_path_var = self.tk.StringVar(value=str(FAILURE_LOG.resolve()))
         self.active_job_var = self.tk.StringVar(value="No job running")
+        self.version_var = self.tk.StringVar(
+            value=f"App v{__version__} | Ollama version: detecting..."
+        )
 
         self._configure_styles()
         self._build_ui()
+        self._load_versions()
         self.root.after(100, self._drain_log_queue)
 
     def _configure_styles(self):
@@ -367,17 +373,31 @@ class OllamaMaintenanceApp:
         footer.grid(row=3, column=0, sticky="ew")
         footer.columnconfigure(0, weight=1)
 
-        self.ttk.Label(footer, textvariable=self.report_var, style="Meta.TLabel").grid(
+        self.ttk.Label(footer, textvariable=self.version_var, style="Meta.TLabel").grid(
             row=0, column=0, sticky="w"
+        )
+        self.ttk.Label(footer, textvariable=self.report_var, style="Meta.TLabel").grid(
+            row=1, column=0, pady=(4, 0), sticky="w"
         )
         self.ttk.Label(
             footer,
             text="Requires local Ollama CLI/API. Generated binaries do not bundle Ollama itself.",
             style="Meta.TLabel",
-        ).grid(row=1, column=0, pady=(4, 0), sticky="w")
+        ).grid(row=2, column=0, pady=(4, 0), sticky="w")
 
     def _make_card(self, parent, padding=18):
         return self.ttk.Frame(parent, style="Card.TFrame", padding=padding)
+
+    def _load_versions(self):
+        def worker():
+            ollama_version = detect_ollama_version()
+            if ollama_version:
+                message = f"App v{__version__} | {ollama_version}"
+            else:
+                message = f"App v{__version__} | Ollama version: unavailable"
+            self.root.after(0, lambda: self.version_var.set(message))
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def append_log(self, message):
         self.log_text.insert("end", message + "\n")

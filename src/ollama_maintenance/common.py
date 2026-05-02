@@ -1,4 +1,5 @@
 import re
+import subprocess
 from datetime import datetime
 
 OUTPUT_PREVIEW_LIMIT = 500
@@ -130,3 +131,23 @@ def format_bytes(num_bytes):
                 return f"{int(value)} {unit}"
             return f"{value:.2f} {unit}"
         value /= 1024
+
+
+def detect_ollama_version(timeout=5):
+    try:
+        result = subprocess.run(
+            ["ollama", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return None
+
+    output = clean_text(result.stdout) or clean_text(result.stderr)
+    if result.returncode != 0 or not output:
+        return None
+
+    return output

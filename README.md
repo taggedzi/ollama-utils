@@ -24,6 +24,11 @@ The reporting is intentionally opinionated:
 - verbose tokenizer and tensor-heavy metadata are not stored
 - long text fields are reduced to previews instead of being dumped raw
 
+## Screen Shot
+
+![screenshot](docs/screenshots/python_3U6m9C2EV4.png)
+![screenshot](docs/screenshots/python_ldTFhQZRoB.png)
+
 ## Requirements
 
 - Python 3.10+
