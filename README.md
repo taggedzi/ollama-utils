@@ -24,10 +24,10 @@ The reporting is intentionally opinionated:
 - verbose tokenizer and tensor-heavy metadata are not stored
 - long text fields are reduced to previews instead of being dumped raw
 
-## Screen Shot
+## Screenshots
 
-![screenshot](docs/screenshots/python_3U6m9C2EV4.png)
 ![screenshot](docs/screenshots/python_ldTFhQZRoB.png)
+![screenshot](docs/screenshots/python_3U6m9C2EV4.png)
 
 ## Requirements
 
@@ -36,6 +36,8 @@ The reporting is intentionally opinionated:
 - a running local Ollama server on `http://127.0.0.1:11434`
 - optional: `nvidia-smi` available on `PATH` for VRAM-aware size filtering
 - for the source GUI launcher, a Python build that includes `tkinter`
+
+Generated binaries do not bundle Ollama itself. They still require access to a local or remote Ollama installation.
 
 ## System Dependencies
 
@@ -81,6 +83,7 @@ This script:
 - reads the installed model list from `ollama list`
 - runs `ollama pull` for each model
 - prints progress and failures as it goes
+- supports clean interruption when launched from the GUI
 
 ### Test and Inventory Installed Models
 
@@ -102,6 +105,7 @@ python3 test_ollama_models.py --ignore-size
 python3 test_ollama_models.py 600 --ignore-size
 python3 test_ollama_models.py 600 --vram-mib 16384 --report-path custom-report.yaml
 python3 test_ollama_models.py 600 --api-base-url http://192.168.1.25:11434
+python3 test_ollama_models.py 600 --api-base-url http://192.168.1.25:11434/api
 ```
 
 Default behavior:
@@ -112,6 +116,13 @@ Default behavior:
 - smoke-tests runnable models with `ollama run`
 - retries embedding-style models with sample input when needed
 - writes a YAML report to `ollama_model_failures.yaml`
+
+Useful CLI options:
+
+- `--ignore-size`: disables VRAM-based skipping entirely
+- `--vram-mib` / `--vram-bytes`: manually override detected VRAM for fit checks
+- `--report-path`: write the YAML report somewhere other than the default path
+- `--api-base-url`: point the inventory/test workflow at a different Ollama server; accepts either the server root or an explicit `/api` suffix
 
 ### Launch the GUI
 
@@ -138,6 +149,13 @@ The GUI provides:
 - a save dialog and editable path for the YAML report
 - a stop button that requests a clean shutdown and preserves a partial test report
 - a shared live log pane and activity status area
+- a footer note that shows the application version and detected Ollama version when available
+
+GUI notes:
+
+- the Ollama API base URL field is session-scoped and resets to the default on application restart
+- the update tab uses the local `ollama` CLI, while the test tab uses the configured Ollama HTTP API base URL for model inventory and metadata calls
+- if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 
 ## YAML Report
 
@@ -166,9 +184,12 @@ Useful fields in the overview include:
 - context window when available
 - device-VRAM fit status
 
+The report also records the effective API base URL, timeout, VRAM policy, and selected output path for the run.
+
 ## Notes and Limitations
 
 - `test_ollama_models.py` depends on the local Ollama HTTP API and the `ollama` CLI.
+- `update_ollama_models.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
 - `nvidia-smi` is optional. When present, VRAM filtering currently uses the largest `memory.total` value returned by `nvidia-smi`.
 - If `nvidia-smi` is unavailable, the script continues without size filtering and records that as a warning.
 - The smoke test is intentionally shallow: it is meant to catch obviously broken models, not benchmark quality.
@@ -199,6 +220,8 @@ pyinstaller --noconfirm --clean --onefile --windowed --name ollama-maintenance o
 
 The generated binary appears under `dist/`.
 
+The binary launches the GUI entry point and is intended for desktop use.
+
 ## GitHub Distribution
 
 GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/workflows/build-release.yml), which:
@@ -206,6 +229,7 @@ GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/work
 - builds the GUI binary on Windows, macOS, and Linux
 - uploads each build as a workflow artifact
 - attaches packaged release assets automatically when you push a tag like `v0.2.0`
+- verifies that `tkinter` is available in the build environment before packaging
 
 Recommended release flow:
 
