@@ -1,3 +1,15 @@
 .venv/
+venv/
+.python-version
 __pycache__/
-*.yaml
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+ollama_model_failures.yaml
+
+.DS_Store
+Thumbs.db

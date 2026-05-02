@@ -1,0 +1,24 @@
+[project]
+name = "ollama-maintenance"
+version = "0.1.0"
+description = "Small maintenance scripts for updating, inventorying, and smoke-testing local Ollama models."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Repository Maintainer" }
+]
+keywords = ["ollama", "llm", "models", "inventory", "maintenance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Utilities",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"

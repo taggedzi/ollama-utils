@@ -712,23 +712,19 @@ def main():
         try:
             device_vram_bytes = get_device_vram_bytes()
         except RuntimeError as exc:
-            log(f"Unable to determine device VRAM: {exc}")
-            failures.append(
-                build_failure(
-                    model="<device_vram>",
-                    category="setup_error",
-                    command=["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-                    returncode=None,
-                    error=str(exc),
-                    output="",
-                )
+            add_warning(
+                warnings,
+                "device_vram",
+                f"Unable to determine device VRAM; continuing without size filtering: {exc}",
             )
-            models = []
+            device_vram_bytes = None
 
     log(f"Found {len(models)} models.")
     log(f"Per-model timeout: {args.timeout_seconds} seconds.")
     if args.fit_vram and device_vram_bytes is not None:
         log(f"Startup device VRAM filter: {format_bytes(device_vram_bytes)}.\n")
+    elif args.fit_vram:
+        log("Startup device VRAM filter unavailable; continuing without size filtering.\n")
     else:
         log("")
 
