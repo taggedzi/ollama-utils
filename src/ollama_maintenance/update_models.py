@@ -1,6 +1,9 @@
 import subprocess
 import sys
+import time
 from datetime import datetime
+
+from .common import clean_text
 
 
 def default_emit(message):
@@ -36,7 +39,7 @@ def get_models():
     return models
 
 
-def pull_model(model, index, total, emit):
+def pull_model(model, index, total, emit, stop_requested=None):
     log(f"[{index}/{total}] Updating {model}", emit)
 
     process = subprocess.Popen(
@@ -50,15 +53,32 @@ def pull_model(model, index, total, emit):
 
     assert process.stdout is not None
 
-    for line in process.stdout:
-        line = line.rstrip()
-        if line:
-            emit(f"    {line}")
+    while True:
+        if stop_requested and stop_requested():
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            raise KeyboardInterrupt
+
+        line = process.stdout.readline()
+        if not line:
+            if process.poll() is not None:
+                break
+            time.sleep(0.1)
+            continue
+
+        cleaned_line = clean_text(line)
+        if cleaned_line:
+            for output_line in cleaned_line.splitlines():
+                emit(f"    {output_line}")
 
     return process.wait()
 
 
-def main(argv=None, emit=None):
+def main(argv=None, emit=None, stop_requested=None):
     del argv
     emit = emit or default_emit
 
@@ -75,19 +95,32 @@ def main(argv=None, emit=None):
     failures = []
     log(f"Found {len(models)} models to update.", emit)
 
-    for index, model in enumerate(models, start=1):
-        try:
-            returncode = pull_model(model, index, len(models), emit)
-        except OSError as exc:
-            log(f"ERROR: Failed to start update for {model}: {exc}", emit)
-            failures.append(model)
-            continue
+    try:
+        for index, model in enumerate(models, start=1):
+            if stop_requested and stop_requested():
+                raise KeyboardInterrupt
 
-        if returncode == 0:
-            log(f"Completed {model}", emit)
-        else:
-            log(f"FAILED {model} with exit code {returncode}", emit)
-            failures.append(model)
+            try:
+                returncode = pull_model(
+                    model,
+                    index,
+                    len(models),
+                    emit,
+                    stop_requested=stop_requested,
+                )
+            except OSError as exc:
+                log(f"ERROR: Failed to start update for {model}: {exc}", emit)
+                failures.append(model)
+                continue
+
+            if returncode == 0:
+                log(f"Completed {model}", emit)
+            else:
+                log(f"FAILED {model} with exit code {returncode}", emit)
+                failures.append(model)
+    except KeyboardInterrupt:
+        log("Interrupted. Update stopped before processing all models.", emit)
+        return 130
 
     log(f"Done. Updated: {len(models) - len(failures)}/{len(models)}", emit)
 

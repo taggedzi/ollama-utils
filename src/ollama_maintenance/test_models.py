@@ -2,6 +2,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
@@ -109,17 +110,42 @@ def parse_args(argv):
         action="store_false",
         help="Test all models regardless of the total GPU VRAM measured at startup.",
     )
+    parser.add_argument(
+        "--vram-bytes",
+        type=int,
+        default=None,
+        help="Override detected device VRAM with an explicit byte value.",
+    )
+    parser.add_argument(
+        "--vram-mib",
+        type=int,
+        default=None,
+        help="Override detected device VRAM with an explicit MiB value.",
+    )
+    parser.add_argument(
+        "--report-path",
+        type=Path,
+        default=FAILURE_LOG,
+        help=f"Write the YAML report to this path. Default: {FAILURE_LOG}.",
+    )
 
     args = parser.parse_args(argv[1:])
 
     if args.timeout_seconds <= 0:
         raise ValueError("Timeout must be a positive integer.")
+    if args.vram_bytes is not None and args.vram_bytes <= 0:
+        raise ValueError("VRAM bytes override must be a positive integer.")
+    if args.vram_mib is not None and args.vram_mib <= 0:
+        raise ValueError("VRAM MiB override must be a positive integer.")
+    if args.vram_bytes is not None and args.vram_mib is not None:
+        raise ValueError("Use either --vram-bytes or --vram-mib, not both.")
 
     return args
 
 
-def write_yaml_report(report):
-    FAILURE_LOG.write_text("\n".join(yaml_dump_lines(report)) + "\n", encoding="utf-8")
+def write_yaml_report(report, report_path):
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text("\n".join(yaml_dump_lines(report)) + "\n", encoding="utf-8")
 
 
 def add_warning(warnings, stage, message):
@@ -353,25 +379,32 @@ def get_device_vram_bytes():
     return max(total_vram_values)
 
 
-def run_model_command(model, prompt, timeout_seconds):
+def resolve_device_vram_bytes(args):
+    if args.vram_bytes is not None:
+        return args.vram_bytes, "manual_bytes"
+    if args.vram_mib is not None:
+        return args.vram_mib * 1024 * 1024, "manual_mib"
+    return get_device_vram_bytes(), "nvidia_smi"
+
+
+def run_model_command(model, prompt, timeout_seconds, stop_requested=None):
     command = ["ollama", "run", model, prompt]
 
     try:
-        result = run_cmd(command, timeout=timeout_seconds)
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     except FileNotFoundError:
         return {
             "ok": False,
             "command": command,
             "returncode": None,
             "error": "The 'ollama' command was not found in PATH.",
-            "output": "",
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "ok": False,
-            "command": command,
-            "returncode": None,
-            "error": f"Timed out after {timeout_seconds} seconds",
             "output": "",
         }
     except OSError as exc:
@@ -383,16 +416,55 @@ def run_model_command(model, prompt, timeout_seconds):
             "output": "",
         }
 
+    deadline = time.monotonic() + timeout_seconds
+
+    while True:
+        if stop_requested and stop_requested():
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+            return {
+                "ok": False,
+                "command": command,
+                "returncode": None,
+                "error": "Run cancelled by user",
+                "output": clean_text(stdout),
+            }
+
+        if process.poll() is not None:
+            break
+
+        if time.monotonic() >= deadline:
+            process.terminate()
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                stdout, stderr = process.communicate()
+            return {
+                "ok": False,
+                "command": command,
+                "returncode": None,
+                "error": f"Timed out after {timeout_seconds} seconds",
+                "output": clean_text(stdout),
+            }
+
+        time.sleep(0.1)
+
+    stdout, stderr = process.communicate()
     return {
-        "ok": result.returncode == 0,
+        "ok": process.returncode == 0,
         "command": command,
-        "returncode": result.returncode,
-        "error": clean_text(result.stderr),
-        "output": clean_text(result.stdout),
+        "returncode": process.returncode,
+        "error": clean_text(stderr),
+        "output": clean_text(stdout),
     }
 
 
-def test_model(model, timeout_seconds, warnings):
+def test_model(model, timeout_seconds, warnings, stop_requested=None):
     attempts = []
 
     if not model:
@@ -406,17 +478,32 @@ def test_model(model, timeout_seconds, warnings):
         )
         return {"status": "failed", "attempts": attempts, "failure": failure}
 
-    first_attempt = run_model_command(model, "", timeout_seconds)
+    first_attempt = run_model_command(
+        model,
+        "",
+        timeout_seconds,
+        stop_requested=stop_requested,
+    )
     attempts.append(build_attempt(first_attempt, "empty_prompt", ""))
+
+    if first_attempt["error"] == "Run cancelled by user":
+        raise KeyboardInterrupt
 
     if (
         not first_attempt["ok"]
         and "embedding models require input text" in first_attempt["error"]
     ):
-        retry_attempt = run_model_command(model, EMBEDDING_SAMPLE_TEXT, timeout_seconds)
+        retry_attempt = run_model_command(
+            model,
+            EMBEDDING_SAMPLE_TEXT,
+            timeout_seconds,
+            stop_requested=stop_requested,
+        )
         attempts.append(
             build_attempt(retry_attempt, "embedding_sample_text", EMBEDDING_SAMPLE_TEXT)
         )
+        if retry_attempt["error"] == "Run cancelled by user":
+            raise KeyboardInterrupt
         if retry_attempt["ok"]:
             add_warning(
                 warnings,
@@ -520,7 +607,7 @@ def log_model_record(index, total_models, model_record, emit):
         emit(line)
 
 
-def main(argv=None, emit=None):
+def main(argv=None, emit=None, stop_requested=None):
     argv = argv or sys.argv
     emit = emit or default_emit
 
@@ -539,6 +626,8 @@ def main(argv=None, emit=None):
     aborted = False
     tested_models = 0
     device_vram_bytes = None
+    device_vram_source = "unavailable"
+    report_path = args.report_path.resolve()
 
     try:
         models = get_models()
@@ -558,7 +647,7 @@ def main(argv=None, emit=None):
 
     if args.fit_vram:
         try:
-            device_vram_bytes = get_device_vram_bytes()
+            device_vram_bytes, device_vram_source = resolve_device_vram_bytes(args)
         except RuntimeError as exc:
             add_warning(
                 warnings,
@@ -569,8 +658,12 @@ def main(argv=None, emit=None):
 
     emit(f"Found {len(models)} models.")
     emit(f"Per-model timeout: {args.timeout_seconds} seconds.")
+    emit(f"Report path: {report_path}")
     if args.fit_vram and device_vram_bytes is not None:
-        emit(f"Startup device VRAM filter: {format_bytes(device_vram_bytes)}.\n")
+        emit(
+            f"Startup device VRAM filter: {format_bytes(device_vram_bytes)}"
+            f" [{device_vram_source}].\n"
+        )
     elif args.fit_vram:
         emit("Startup device VRAM filter unavailable; continuing without size filtering.\n")
     else:
@@ -578,6 +671,9 @@ def main(argv=None, emit=None):
 
     try:
         for index, model_summary in enumerate(models, start=1):
+            if stop_requested and stop_requested():
+                raise KeyboardInterrupt
+
             model = clean_text(model_summary.get("name"))
             emit(f"[{index}/{len(models)}] Inspecting {model} ...")
 
@@ -624,7 +720,12 @@ def main(argv=None, emit=None):
                 log_model_record(index, len(models), model_record, emit)
                 continue
 
-            test_result = test_model(model, args.timeout_seconds, warnings)
+            test_result = test_model(
+                model,
+                args.timeout_seconds,
+                warnings,
+                stop_requested=stop_requested,
+            )
             tested_models += 1
 
             model_record["runtime"]["test"] = test_result
@@ -647,10 +748,12 @@ def main(argv=None, emit=None):
 
     report = {
         "generated_at": timestamp_now(),
+        "report_path": str(report_path),
         "timeout_seconds": args.timeout_seconds,
         "fit_vram": args.fit_vram,
         "device_vram_bytes": device_vram_bytes,
         "device_vram_human": format_bytes(device_vram_bytes),
+        "device_vram_source": device_vram_source,
         "total_models": len(models),
         "tested_models": tested_models,
         "skipped_models": len(skips),
@@ -664,9 +767,9 @@ def main(argv=None, emit=None):
     }
 
     try:
-        write_yaml_report(report)
+        write_yaml_report(report, report_path)
     except OSError as exc:
-        emit(f"Failed to write YAML report {FAILURE_LOG}: {exc}")
+        emit(f"Failed to write YAML report {report_path}: {exc}")
         return 1
 
     emit("")
@@ -675,7 +778,7 @@ def main(argv=None, emit=None):
         emit(f"Skipped models: {len(skips)}")
     if warnings:
         emit(f"Warnings: {len(warnings)}")
-    emit(f"Failure report: {FAILURE_LOG.resolve()}")
+    emit(f"Failure report: {report_path}")
 
     return summarize_exit_code(failures, aborted)
 

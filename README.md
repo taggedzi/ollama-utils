@@ -95,6 +95,7 @@ Optional examples:
 python3 test_ollama_models.py 600
 python3 test_ollama_models.py --ignore-size
 python3 test_ollama_models.py 600 --ignore-size
+python3 test_ollama_models.py 600 --vram-mib 16384 --report-path custom-report.yaml
 ```
 
 Default behavior:
@@ -122,10 +123,14 @@ ollama-maintenance-gui
 
 The GUI provides:
 
+- separate `Update` and `Test & Report` tabs
 - one-click model updates
 - one-click test and inventory runs
 - a timeout field and VRAM filter toggle
-- a live log pane that mirrors CLI output
+- an optional manual VRAM override in MiB
+- a save dialog and editable path for the YAML report
+- a stop button that requests a clean shutdown and preserves a partial test report
+- a shared live log pane and activity status area
 
 ## YAML Report
 
