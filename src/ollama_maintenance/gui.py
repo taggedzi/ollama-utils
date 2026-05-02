@@ -4,6 +4,8 @@ import threading
 from pathlib import Path
 
 from .test_models import FAILURE_LOG
+from .test_models import OLLAMA_API_BASE_URL
+from .test_models import normalize_ollama_api_base_url
 from .test_models import main as test_main
 from .update_models import main as update_main
 
@@ -33,6 +35,7 @@ class OllamaMaintenanceApp:
         self.timeout_var = self.tk.StringVar(value="300")
         self.ignore_size_var = self.tk.BooleanVar(value=False)
         self.vram_override_var = self.tk.StringVar(value="")
+        self.api_base_url_var = self.tk.StringVar(value=OLLAMA_API_BASE_URL)
         self.status_var = self.tk.StringVar(value="Idle")
         self.report_var = self.tk.StringVar(value=f"Report: {FAILURE_LOG.resolve()}")
         self.report_path_var = self.tk.StringVar(value=str(FAILURE_LOG.resolve()))
@@ -258,11 +261,18 @@ class OllamaMaintenanceApp:
             row=3, column=1, pady=(0, 10), sticky="ew"
         )
 
+        self.ttk.Label(settings, text="Ollama API base URL", style="Body.TLabel").grid(
+            row=4, column=0, padx=(0, 10), pady=(0, 10), sticky="w"
+        )
+        self.ttk.Entry(settings, textvariable=self.api_base_url_var).grid(
+            row=4, column=1, pady=(0, 10), sticky="ew"
+        )
+
         self.ttk.Checkbutton(
             settings,
             text="Ignore VRAM size filter entirely",
             variable=self.ignore_size_var,
-        ).grid(row=4, column=0, columnspan=2, pady=(2, 0), sticky="w")
+        ).grid(row=5, column=0, columnspan=2, pady=(2, 0), sticky="w")
 
         report = self._make_card(parent)
         report.grid(row=0, column=1, sticky="nsew")
@@ -460,6 +470,12 @@ class OllamaMaintenanceApp:
 
         return str(Path(report_path).expanduser()), None
 
+    def _selected_api_base_url(self):
+        try:
+            return normalize_ollama_api_base_url(self.api_base_url_var.get()), None
+        except ValueError as exc:
+            return None, str(exc)
+
     def run_update(self):
         self._run_worker(
             "Update",
@@ -508,11 +524,18 @@ class OllamaMaintenanceApp:
             self.status_var.set("Invalid report path")
             return
 
+        api_base_url, api_base_url_error = self._selected_api_base_url()
+        if api_base_url_error:
+            self.append_log(api_base_url_error)
+            self.status_var.set("Invalid API URL")
+            return
+
         argv = ["ollama-maintenance-test", str(timeout)]
         if self.ignore_size_var.get():
             argv.append("--ignore-size")
         if vram_override is not None:
             argv.extend(["--vram-mib", str(vram_override)])
+        argv.extend(["--api-base-url", api_base_url])
         argv.extend(["--report-path", report_path])
 
         self._run_worker(

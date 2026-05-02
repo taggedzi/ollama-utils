@@ -96,6 +96,7 @@ python3 test_ollama_models.py 600
 python3 test_ollama_models.py --ignore-size
 python3 test_ollama_models.py 600 --ignore-size
 python3 test_ollama_models.py 600 --vram-mib 16384 --report-path custom-report.yaml
+python3 test_ollama_models.py 600 --api-base-url http://192.168.1.25:11434
 ```
 
 Default behavior:
@@ -128,6 +129,7 @@ The GUI provides:
 - one-click test and inventory runs
 - a timeout field and VRAM filter toggle
 - an optional manual VRAM override in MiB
+- an Ollama API base URL field that defaults to Ollama's local API
 - a save dialog and editable path for the YAML report
 - a stop button that requests a clean shutdown and preserves a partial test report
 - a shared live log pane and activity status area

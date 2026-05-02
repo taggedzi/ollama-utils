@@ -56,8 +56,17 @@ def run_cmd(args, timeout, input_text=None):
     )
 
 
-def run_ollama_api(method, path, payload=None, timeout=API_TIMEOUT_SECONDS):
-    url = f"{OLLAMA_API_BASE_URL}{path}"
+def normalize_ollama_api_base_url(value):
+    cleaned = (value or "").strip().rstrip("/")
+    if not cleaned:
+        raise ValueError("Ollama API base URL is required.")
+    if cleaned.endswith("/api"):
+        return cleaned
+    return f"{cleaned}/api"
+
+
+def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT_SECONDS):
+    url = f"{api_base_url}{path}"
     body = None
     headers = {}
 
@@ -128,6 +137,14 @@ def parse_args(argv):
         default=FAILURE_LOG,
         help=f"Write the YAML report to this path. Default: {FAILURE_LOG}.",
     )
+    parser.add_argument(
+        "--api-base-url",
+        default=OLLAMA_API_BASE_URL,
+        help=(
+            "Base URL for the Ollama HTTP API. Accepts either the server root or "
+            f"an explicit /api path. Default: {OLLAMA_API_BASE_URL}."
+        ),
+    )
 
     args = parser.parse_args(argv[1:])
 
@@ -139,6 +156,7 @@ def parse_args(argv):
         raise ValueError("VRAM MiB override must be a positive integer.")
     if args.vram_bytes is not None and args.vram_mib is not None:
         raise ValueError("Use either --vram-bytes or --vram-mib, not both.")
+    args.api_base_url = normalize_ollama_api_base_url(args.api_base_url)
 
     return args
 
@@ -313,8 +331,8 @@ def build_model_details(model_metadata):
     }
 
 
-def get_models():
-    payload = run_ollama_api("GET", "/tags")
+def get_models(api_base_url):
+    payload = run_ollama_api("GET", "/tags", api_base_url=api_base_url)
     models = payload.get("models")
     if not isinstance(models, list):
         raise RuntimeError("Ollama API /tags did not return a 'models' list.")
@@ -336,8 +354,13 @@ def get_models():
     return normalized_models
 
 
-def get_model_metadata(model_name):
-    metadata = run_ollama_api("POST", "/show", payload={"model": model_name})
+def get_model_metadata(model_name, api_base_url):
+    metadata = run_ollama_api(
+        "POST",
+        "/show",
+        api_base_url=api_base_url,
+        payload={"model": model_name},
+    )
     return sanitize_model_metadata(metadata)
 
 
@@ -628,9 +651,10 @@ def main(argv=None, emit=None, stop_requested=None):
     device_vram_bytes = None
     device_vram_source = "unavailable"
     report_path = args.report_path.resolve()
+    api_base_url = args.api_base_url
 
     try:
-        models = get_models()
+        models = get_models(api_base_url)
     except RuntimeError as exc:
         emit(f"Unable to list models: {exc}")
         failures.append(
@@ -658,6 +682,7 @@ def main(argv=None, emit=None, stop_requested=None):
 
     emit(f"Found {len(models)} models.")
     emit(f"Per-model timeout: {args.timeout_seconds} seconds.")
+    emit(f"Ollama API base URL: {api_base_url}")
     emit(f"Report path: {report_path}")
     if args.fit_vram and device_vram_bytes is not None:
         emit(
@@ -680,7 +705,7 @@ def main(argv=None, emit=None, stop_requested=None):
             metadata = None
             metadata_error = None
             try:
-                metadata = get_model_metadata(model)
+                metadata = get_model_metadata(model, api_base_url)
             except RuntimeError as exc:
                 metadata_error = str(exc)
                 add_warning(
@@ -749,6 +774,7 @@ def main(argv=None, emit=None, stop_requested=None):
     report = {
         "generated_at": timestamp_now(),
         "report_path": str(report_path),
+        "api_base_url": api_base_url,
         "timeout_seconds": args.timeout_seconds,
         "fit_vram": args.fit_vram,
         "device_vram_bytes": device_vram_bytes,
