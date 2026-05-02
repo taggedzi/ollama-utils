@@ -26,8 +26,8 @@ The reporting is intentionally opinionated:
 
 ## Screenshots
 
-![screenshot](docs/screenshots/python_ldTFhQZRoB.png)
-![screenshot](docs/screenshots/python_3U6m9C2EV4.png)
+![screenshot](docs/screenshots/python_upIulaCyfr.png)
+![screenshot](docs/screenshots/python_st4mPQ4vzT.png)
 
 ## Requirements
 
