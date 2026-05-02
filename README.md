@@ -2,6 +2,9 @@
 
 Small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
 
+> Disclaimer:
+> This project is an independent utility and is not part of Ollama, is not endorsed by Ollama, and has no affiliation with Ollama.
+
 This repository currently includes:
 
 - `update_ollama_models.py`: updates every locally installed Ollama model with `ollama pull`
