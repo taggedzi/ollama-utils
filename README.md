@@ -1,6 +1,6 @@
 # Ollama Utilities
 
-Small Utility scripts for local [Ollama](https://ollama.com/) model inventories.
+Small Utility scripts for local [Ollama](https://ollama.com/) model inventories. The purpose of this project is to help individuals maintain their own collections of Ollama models and collect metadata about them.
 
 This repository currently includes:
 
@@ -123,7 +123,7 @@ Useful fields in the overview include:
 
 ## Development
 
-This repo uses only the Python standard library.
+This repo require only the Python standard library. There is one optional dependency only required for VRAM measurment in using nVidia hardware.
 
 Quick syntax check:
 
