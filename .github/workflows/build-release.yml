@@ -1,0 +1,89 @@
+name: Build Release Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: ollama-maintenance-linux
+            binary_name: ollama-maintenance
+          - os: windows-latest
+            artifact_name: ollama-maintenance-windows
+            binary_name: ollama-maintenance.exe
+          - os: macos-latest
+            artifact_name: ollama-maintenance-macos
+            binary_name: ollama-maintenance
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Linux Tk runtime
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip .[build]
+
+      - name: Verify tkinter support
+        run: python -c "import tkinter"
+
+      - name: Build GUI binary
+        run: >
+          pyinstaller
+          --noconfirm
+          --clean
+          --onefile
+          --windowed
+          --name ollama-maintenance
+          ollama_maintenance_gui.py
+
+      - name: Package release asset
+        shell: bash
+        run: |
+          mkdir -p release
+          cp README.md LICENSE release/
+          cp "dist/${{ matrix.binary_name }}" release/
+          cd release
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            powershell -Command "Compress-Archive -Path * -DestinationPath ../${{ matrix.artifact_name }}.zip"
+          else
+            tar -czf "../${{ matrix.artifact_name }}.tar.gz" *
+          fi
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}.zip
+            ${{ matrix.artifact_name }}.tar.gz
+          if-no-files-found: ignore
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.artifact_name }}.zip
+            ${{ matrix.artifact_name }}.tar.gz

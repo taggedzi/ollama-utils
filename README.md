@@ -1,11 +1,12 @@
 # Ollama Utilities
 
-Small Utility scripts for local [Ollama](https://ollama.com/) model inventories. The purpose of this project is to help individuals maintain their own collections of Ollama models and collect metadata about them.
+Small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
 
 This repository currently includes:
 
 - `update_ollama_models.py`: updates every locally installed Ollama model with `ollama pull`
 - `test_ollama_models.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
+- `ollama_maintenance_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
 
 ## What This Repo Is For
 
@@ -25,10 +26,11 @@ The reporting is intentionally opinionated:
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.10+
 - [Ollama](https://ollama.com/) installed and available on `PATH`
 - a running local Ollama server on `http://127.0.0.1:11434`
 - optional: `nvidia-smi` available on `PATH` for VRAM-aware size filtering
+- for the source GUI launcher, a Python build that includes `tkinter`
 
 ## System Dependencies
 
@@ -43,6 +45,12 @@ If `nvidia-smi` is available, `test_ollama_models.py` measures total GPU VRAM at
 
 ```text
 .
+├── src/ollama_maintenance/
+│   ├── gui.py
+│   ├── test_models.py
+│   └── update_models.py
+├── .github/workflows/build-release.yml
+├── ollama_maintenance_gui.py
 ├── test_ollama_models.py
 ├── update_ollama_models.py
 ├── pyproject.toml
@@ -57,6 +65,12 @@ If `nvidia-smi` is available, `test_ollama_models.py` measures total GPU VRAM at
 python3 update_ollama_models.py
 ```
 
+Installed entry point:
+
+```bash
+ollama-maintenance-update
+```
+
 This script:
 
 - reads the installed model list from `ollama list`
@@ -67,6 +81,12 @@ This script:
 
 ```bash
 python3 test_ollama_models.py
+```
+
+Installed entry point:
+
+```bash
+ollama-maintenance-test
 ```
 
 Optional examples:
@@ -85,6 +105,27 @@ Default behavior:
 - smoke-tests runnable models with `ollama run`
 - retries embedding-style models with sample input when needed
 - writes a YAML report to `ollama_model_failures.yaml`
+
+### Launch the GUI
+
+Run the GUI from source:
+
+```bash
+python3 ollama_maintenance_gui.py
+```
+
+Installed entry point:
+
+```bash
+ollama-maintenance-gui
+```
+
+The GUI provides:
+
+- one-click model updates
+- one-click test and inventory runs
+- a timeout field and VRAM filter toggle
+- a live log pane that mirrors CLI output
 
 ## YAML Report
 
@@ -123,12 +164,42 @@ Useful fields in the overview include:
 
 ## Development
 
-This repo require only the Python standard library. There is one optional dependency only required for VRAM measurment in using nVidia hardware.
+This repo requires only the Python standard library at runtime. There is one optional system dependency for VRAM measurement on NVIDIA hardware.
 
 Quick syntax check:
 
 ```bash
-python3 -m py_compile test_ollama_models.py update_ollama_models.py
+python3 -m py_compile \
+  update_ollama_models.py \
+  test_ollama_models.py \
+  ollama_maintenance_gui.py \
+  src/ollama_maintenance/*.py
+```
+
+## Building Standalone Binaries
+
+Local build:
+
+```bash
+python3 -m pip install .[build]
+pyinstaller --noconfirm --clean --onefile --windowed --name ollama-maintenance ollama_maintenance_gui.py
+```
+
+The generated binary appears under `dist/`.
+
+## GitHub Distribution
+
+GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/workflows/build-release.yml), which:
+
+- builds the GUI binary on Windows, macOS, and Linux
+- uploads each build as a workflow artifact
+- attaches packaged release assets automatically when you push a tag like `v0.2.0`
+
+Recommended release flow:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## Public Repo Notes

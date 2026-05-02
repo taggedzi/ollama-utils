@@ -1,7 +1,11 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ollama-maintenance"
-version = "0.1.0"
-description = "Small maintenance scripts for updating, inventorying, and smoke-testing local Ollama models."
+version = "0.2.0"
+description = "Local CLI and GUI utilities for updating, inventorying, and smoke-testing Ollama models."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -18,6 +22,22 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Topic :: Utilities",
 ]
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.0",
+]
+
+[project.scripts]
+ollama-maintenance-update = "ollama_maintenance.update_models:main"
+ollama-maintenance-test = "ollama_maintenance.test_models:main"
+ollama-maintenance-gui = "ollama_maintenance.gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 88
