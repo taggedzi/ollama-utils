@@ -46,9 +46,13 @@ tz-ollama-utils-gui = "tz_ollama_utils.gui:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+tz_ollama_utils = ["assets/icons/*.png", "assets/icons/*.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

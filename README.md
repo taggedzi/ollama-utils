@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icons/tz-ollama-utils.png" alt="tz-ollama-utils logo" width="160">
+</p>
+
 # tz-ollama-utils
 
 TaggedZ's Ollama Utilities: small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
@@ -60,8 +64,10 @@ If `nvidia-smi` is available, `tz_ollama_utils_test.py` measures total GPU VRAM 
 │   ├── gui.py
 │   ├── test_models.py
 │   └── update_models.py
+├── assets/                    # application icons, favicons, and web images
 ├── tests/                     # pytest test suite
 ├── .github/workflows/build-release.yml
+├── tz_ollama_utils_gui.spec   # PyInstaller spec with bundled app assets
 ├── tz_ollama_utils_gui.py     # run-from-source shim
 ├── tz_ollama_utils_test.py    # run-from-source shim
 ├── tz_ollama_utils_update.py  # run-from-source shim
@@ -237,12 +243,12 @@ Local build:
 
 ```bash
 python3 -m pip install .[build]
-python3 -m PyInstaller --noconfirm --clean --onefile --windowed --name tz-ollama-utils tz_ollama_utils_gui.py
+python3 -m PyInstaller --noconfirm --clean tz_ollama_utils_gui.spec
 ```
 
 The generated binary appears under `dist/`.
 
-The binary launches the GUI entry point and is intended for desktop use.
+The binary launches the GUI entry point and is intended for desktop use. The bundled build now includes the project artwork used by the GUI header and applies the branded executable icon on Windows builds.
 
 ## GitHub Distribution
 

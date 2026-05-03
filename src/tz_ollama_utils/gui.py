@@ -20,6 +20,34 @@ LOG_BG = "#16181C"
 LOG_FG = "#F5EBDD"
 
 
+def _asset_roots():
+    roots = []
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        roots.append(Path(bundle_root) / "assets")
+
+    package_assets = Path(__file__).resolve().parent / "assets"
+    repo_assets = Path(__file__).resolve().parents[2] / "assets"
+    roots.extend([package_assets, repo_assets])
+
+    deduped_roots = []
+    seen = set()
+    for root in roots:
+        key = str(root)
+        if key not in seen:
+            deduped_roots.append(root)
+            seen.add(key)
+    return deduped_roots
+
+
+def _find_asset(*parts):
+    for root in _asset_roots():
+        candidate = root.joinpath(*parts)
+        if candidate.exists():
+            return candidate
+    return None
+
+
 class OllamaUtilsApp:
     def __init__(self, root, tk_module, ttk_module):
         self.tk = tk_module
@@ -47,8 +75,12 @@ class OllamaUtilsApp:
         self.version_var = self.tk.StringVar(
             value=f"App v{__version__} | Ollama version: detecting..."
         )
+        self.window_icon = None
+        self.header_logo = None
 
         self._configure_styles()
+        self._apply_window_icon()
+        self.header_logo = self._load_header_logo()
         self._build_ui()
         self._load_versions()
         self.root.after(100, self._drain_log_queue)
@@ -75,6 +107,7 @@ class OllamaUtilsApp:
             foreground="#F6DDD6",
             font=("Segoe UI", 10),
         )
+        style.configure("HeaderLogo.TLabel", background=ACCENT)
         style.configure(
             "SectionTitle.TLabel",
             background=PANEL_BG,
@@ -135,13 +168,20 @@ class OllamaUtilsApp:
     def _build_header(self):
         header = self.ttk.Frame(self.root, style="Header.TFrame", padding=(22, 18))
         header.grid(row=0, column=0, sticky="ew")
-        header.columnconfigure(0, weight=1)
+        header.columnconfigure(1, weight=1)
+
+        if self.header_logo is not None:
+            self.ttk.Label(
+                header,
+                image=self.header_logo,
+                style="HeaderLogo.TLabel",
+            ).grid(row=0, column=0, rowspan=2, padx=(0, 16), sticky="w")
 
         self.ttk.Label(
             header,
             text="TaggedZ's Ollama Utilities",
             style="Title.TLabel",
-        ).grid(row=0, column=0, sticky="w")
+        ).grid(row=0, column=1, sticky="w")
         self.ttk.Label(
             header,
             text=(
@@ -149,7 +189,7 @@ class OllamaUtilsApp:
                 "from a cleaner desktop workflow."
             ),
             style="Subtitle.TLabel",
-        ).grid(row=1, column=0, pady=(6, 0), sticky="w")
+        ).grid(row=1, column=1, pady=(6, 0), sticky="w")
 
     def _build_tabs(self):
         shell = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 16, 18, 10))
@@ -398,6 +438,38 @@ class OllamaUtilsApp:
 
     def _make_card(self, parent, padding=18):
         return self.ttk.Frame(parent, style="Card.TFrame", padding=padding)
+
+    def _load_header_logo(self):
+        logo_path = _find_asset("icons", "tz-ollama-utils.png")
+        if logo_path is None:
+            return None
+
+        try:
+            image = self.tk.PhotoImage(file=str(logo_path))
+        except self.tk.TclError:
+            return None
+
+        if image.width() > 88:
+            scale = max(1, (image.width() + 87) // 88)
+            image = image.subsample(scale, scale)
+        return image
+
+    def _apply_window_icon(self):
+        icon_path = _find_asset("icons", "tz-ollama-utils.png")
+        if icon_path is not None:
+            try:
+                self.window_icon = self.tk.PhotoImage(file=str(icon_path))
+                self.root.iconphoto(True, self.window_icon)
+            except self.tk.TclError:
+                self.window_icon = None
+
+        if sys.platform.startswith("win"):
+            bitmap_path = _find_asset("icons", "tz_ollama_utils_icon.ico")
+            if bitmap_path is not None:
+                try:
+                    self.root.iconbitmap(default=str(bitmap_path))
+                except self.tk.TclError:
+                    pass
 
     def _load_versions(self):
         def worker():

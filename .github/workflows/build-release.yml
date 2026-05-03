@@ -50,10 +50,7 @@ jobs:
           python -m PyInstaller
           --noconfirm
           --clean
-          --onefile
-          --windowed
-          --name tz-ollama-utils
-          tz_ollama_utils_gui.py
+          tz_ollama_utils_gui.spec
 
       - name: Package release asset
         shell: bash

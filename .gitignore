@@ -1,6 +1,7 @@
 build/
 dist/
 *.spec
+!tz_ollama_utils_gui.spec
 __pycache__/
 *.pyc
 ollama_model_failures.yaml
