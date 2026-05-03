@@ -242,13 +242,19 @@ python3 -m py_compile \
 Local build:
 
 ```bash
+rm -rf build dist
 python3 -m pip install .[build]
 python3 -m PyInstaller --noconfirm --clean tz_ollama_utils_gui.spec
 ```
 
-The generated binary appears under `dist/`.
+The generated binary appears under `dist/` as `tz-ollama-utils.exe` on Windows.
 
-The binary launches the GUI entry point and is intended for desktop use. The bundled build now includes the project artwork used by the GUI header and applies the branded executable icon on Windows builds.
+The binary launches the GUI entry point and is intended for desktop use. The bundled build includes the project artwork used by the GUI header and applies the branded executable icon on Windows builds.
+
+Windows/icon notes:
+
+- `tz_ollama_utils_gui.spec` sets `icon=assets/icons/tz_ollama_utils_icon.ico`, which is the icon Windows Explorer reads from the generated `.exe`.
+- the spec also bundles the full top-level `assets/` directory into the application, so the GUI can load `assets/icons/tz-ollama-utils-header-88px.png` at runtime
 
 ## GitHub Distribution
 

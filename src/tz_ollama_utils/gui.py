@@ -25,6 +25,7 @@ def _asset_roots():
     bundle_root = getattr(sys, "_MEIPASS", None)
     if bundle_root:
         roots.append(Path(bundle_root) / "assets")
+        roots.append(Path(bundle_root) / "tz_ollama_utils" / "assets")
 
     repo_assets = Path(__file__).resolve().parents[2] / "assets"
     package_assets = Path(__file__).resolve().parent / "assets"
@@ -46,6 +47,20 @@ def _find_asset(*parts):
         if candidate.exists():
             return candidate
     return None
+
+
+def _configure_windows_app_id():
+    if not sys.platform.startswith("win"):
+        return
+
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "taggedz.tz-ollama-utils"
+        )
+    except (AttributeError, OSError):
+        pass
 
 
 class OllamaUtilsApp:
@@ -451,13 +466,12 @@ class OllamaUtilsApp:
         return image
 
     def _apply_window_icon(self):
-        if sys.platform.startswith("win"):
-            bitmap_path = _find_asset("icons", "tz_ollama_utils_icon.ico")
-            if bitmap_path is not None:
-                try:
-                    self.root.iconbitmap(default=str(bitmap_path))
-                except self.tk.TclError:
-                    pass
+        bitmap_path = _find_asset("icons", "tz_ollama_utils_icon.ico")
+        if bitmap_path is not None and sys.platform.startswith("win"):
+            try:
+                self.root.iconbitmap(str(bitmap_path))
+            except self.tk.TclError:
+                pass
 
         icon_path = _find_asset("icons", "tz-ollama-utils.png")
         if icon_path is not None:
@@ -658,6 +672,7 @@ def main():
         )
         return 1
 
+    _configure_windows_app_id()
     root = tk.Tk()
     OllamaUtilsApp(root, tk, ttk)
     root.mainloop()

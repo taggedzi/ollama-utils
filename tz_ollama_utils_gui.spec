@@ -5,7 +5,9 @@ from pathlib import Path
 
 
 project_root = Path(SPECPATH)
+source_dir = project_root / "src"
 assets_dir = project_root / "assets"
+package_assets_dir = project_root / "src" / "tz_ollama_utils" / "assets"
 icon_path = None
 
 if sys.platform.startswith("win"):
@@ -14,10 +16,19 @@ if sys.platform.startswith("win"):
 
 a = Analysis(
     ["tz_ollama_utils_gui.py"],
-    pathex=[str(project_root)],
+    pathex=[str(project_root), str(source_dir)],
     binaries=[],
-    datas=[(str(assets_dir), "assets")],
-    hiddenimports=[],
+    datas=[
+        (str(assets_dir), "assets"),
+        (str(package_assets_dir), "tz_ollama_utils/assets"),
+    ],
+    hiddenimports=[
+        "tz_ollama_utils",
+        "tz_ollama_utils.common",
+        "tz_ollama_utils.gui",
+        "tz_ollama_utils.test_models",
+        "tz_ollama_utils.update_models",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -37,7 +48,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,
