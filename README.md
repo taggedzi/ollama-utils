@@ -114,6 +114,7 @@ python3 ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434/api
 Default behavior:
 
 - attempts to measure total device VRAM once at startup using `nvidia-smi`
+- uses the Ollama HTTP API for inventory details, but falls back to `ollama list` if the API inventory is unavailable or incomplete
 - skips models whose stored size exceeds startup device VRAM when VRAM detection is available
 - fetches concise metadata from the Ollama API
 - smoke-tests runnable models with `ollama run`
@@ -157,7 +158,8 @@ The GUI provides:
 GUI notes:
 
 - the Ollama API base URL field is session-scoped and resets to the default on application restart
-- the update tab uses the local `ollama` CLI, while the test tab uses the configured Ollama HTTP API base URL for model inventory and metadata calls
+- the update tab uses the local `ollama` CLI
+- the test tab prefers the configured Ollama HTTP API base URL for inventory details and metadata, but falls back to `ollama list` when the API inventory is unavailable or returns fewer models than the CLI
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 
 ## YAML Report
@@ -191,7 +193,7 @@ The report also records the effective API base URL, timeout, VRAM policy, and se
 
 ## Notes and Limitations
 
-- `ollama_utils_test.py` depends on the local Ollama HTTP API and the `ollama` CLI.
+- `ollama_utils_test.py` depends on both the local Ollama HTTP API and the `ollama` CLI.
 - `ollama_utils_update.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
 - `nvidia-smi` is optional. When present, VRAM filtering currently uses the largest `memory.total` value returned by `nvidia-smi`.
 - If `nvidia-smi` is unavailable, the script continues without size filtering and records that as a warning.

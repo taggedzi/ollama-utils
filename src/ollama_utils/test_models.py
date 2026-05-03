@@ -335,7 +335,7 @@ def build_model_details(model_metadata):
     }
 
 
-def get_models(api_base_url):
+def get_models_from_api(api_base_url):
     payload = run_ollama_api("GET", "/tags", api_base_url=api_base_url)
     models = payload.get("models")
     if not isinstance(models, list):
@@ -356,6 +356,81 @@ def get_models(api_base_url):
         normalized_models.append(model)
 
     return normalized_models
+
+
+def get_models_from_cli():
+    result = run_cmd(tool_command("ollama", "list"), timeout=API_TIMEOUT_SECONDS)
+
+    if result.returncode != 0:
+        error = clean_text(result.stderr) or clean_text(result.stdout)
+        raise RuntimeError(error or "Failed to run 'ollama list'.")
+
+    lines = result.stdout.splitlines()[1:]
+    models = []
+    seen = set()
+
+    for line in lines:
+        parts = line.split()
+        if not parts:
+            continue
+
+        name = clean_text(parts[0])
+        if not name or name in seen:
+            continue
+
+        seen.add(name)
+        models.append({"name": name})
+
+    return models
+
+
+def get_models(api_base_url):
+    warnings = []
+    api_models = None
+    cli_models = None
+
+    try:
+        api_models = get_models_from_api(api_base_url)
+    except RuntimeError as exc:
+        warnings.append(
+            f"Unable to list models from Ollama API /tags; falling back to 'ollama list': {exc}"
+        )
+
+    try:
+        cli_models = get_models_from_cli()
+    except RuntimeError as exc:
+        if api_models is None:
+            raise RuntimeError(
+                "Unable to list models from either Ollama API /tags or 'ollama list': "
+                f"{exc}"
+            ) from exc
+        warnings.append(f"Unable to compare against 'ollama list': {exc}")
+
+    if api_models is None and cli_models is not None:
+        return cli_models, "cli_fallback", warnings
+
+    if api_models is None:
+        raise RuntimeError("Unable to list models.")
+
+    if cli_models is None:
+        return api_models, "api", warnings
+
+    api_by_name = {
+        clean_text(model.get("name")): model
+        for model in api_models
+        if isinstance(model, dict) and clean_text(model.get("name"))
+    }
+    cli_names = [clean_text(model.get("name")) for model in cli_models]
+
+    if len(cli_names) > len(api_models):
+        warnings.append(
+            "Ollama API /tags returned fewer models than 'ollama list'; using CLI inventory "
+            f"for completeness ({len(cli_names)} vs {len(api_models)})."
+        )
+        merged_models = [api_by_name.get(name, {"name": name}) for name in cli_names]
+        return merged_models, "cli_preferred", warnings
+
+    return api_models, "api", warnings
 
 
 def get_model_metadata(model_name, api_base_url):
@@ -657,18 +732,21 @@ def main(argv=None, emit=None, stop_requested=None):
     tested_models = 0
     device_vram_bytes = None
     device_vram_source = "unavailable"
+    inventory_source = "unknown"
     report_path = args.report_path.resolve()
     api_base_url = args.api_base_url
 
     try:
-        models = get_models(api_base_url)
+        models, inventory_source, inventory_warnings = get_models(api_base_url)
+        for message in inventory_warnings:
+            add_warning(warnings, "model_inventory", message)
     except RuntimeError as exc:
         emit(f"Unable to list models: {exc}")
         failures.append(
             build_failure(
                 model="<list_models>",
                 category="setup_error",
-                command=["GET", "/api/tags"],
+                command=["GET", "/api/tags", "or", "ollama", "list"],
                 returncode=None,
                 error=str(exc),
                 output="",
@@ -690,6 +768,7 @@ def main(argv=None, emit=None, stop_requested=None):
     emit(f"Found {len(models)} models.")
     emit(f"Per-model timeout: {args.timeout_seconds} seconds.")
     emit(f"Ollama API base URL: {api_base_url}")
+    emit(f"Inventory source: {inventory_source}")
     emit(f"Report path: {report_path}")
     if args.fit_vram and device_vram_bytes is not None:
         emit(
@@ -782,6 +861,7 @@ def main(argv=None, emit=None, stop_requested=None):
         "generated_at": timestamp_now(),
         "report_path": str(report_path),
         "api_base_url": api_base_url,
+        "inventory_source": inventory_source,
         "timeout_seconds": args.timeout_seconds,
         "fit_vram": args.fit_vram,
         "device_vram_bytes": device_vram_bytes,
