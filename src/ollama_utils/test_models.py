@@ -10,6 +10,7 @@ from urllib import request as urllib_request
 from .common import clean_text
 from .common import default_emit
 from .common import format_bytes
+from .common import StopRequested
 from .common import subprocess_window_kwargs
 from .common import timestamp_now
 from .common import tool_command
@@ -604,7 +605,7 @@ def test_model(model, timeout_seconds, warnings, stop_requested=None):
     attempts.append(build_attempt(first_attempt, "smoke_test_prompt", SMOKE_TEST_PROMPT))
 
     if first_attempt["error"] == "Run cancelled by user":
-        raise KeyboardInterrupt
+        raise StopRequested
 
     if (
         not first_attempt["ok"]
@@ -620,7 +621,7 @@ def test_model(model, timeout_seconds, warnings, stop_requested=None):
             build_attempt(retry_attempt, "embedding_sample_text", EMBEDDING_SAMPLE_TEXT)
         )
         if retry_attempt["error"] == "Run cancelled by user":
-            raise KeyboardInterrupt
+            raise StopRequested
         if retry_attempt["ok"]:
             add_warning(
                 warnings,
@@ -881,7 +882,7 @@ def main(argv=None, emit=None, stop_requested=None):
                 failures.append(failure)
 
             log_model_record(index, len(models), model_record, emit)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, StopRequested):
         aborted = True
         add_warning(warnings, "interrupt", "Run interrupted by user.")
         emit("\nInterrupted. Writing partial YAML report.")
