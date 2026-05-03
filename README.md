@@ -55,14 +55,16 @@ If `nvidia-smi` is available, `ollama_utils_test.py` measures total GPU VRAM at 
 
 ```text
 .
-├── src/ollama_utils/
+├── src/ollama_utils/          # installable package
+│   ├── common.py
 │   ├── gui.py
 │   ├── test_models.py
 │   └── update_models.py
+├── tests/                     # pytest test suite
 ├── .github/workflows/build-release.yml
-├── ollama_utils_gui.py
-├── ollama_utils_test.py
-├── ollama_utils_update.py
+├── ollama_utils_gui.py        # run-from-source shim
+├── ollama_utils_test.py       # run-from-source shim
+├── ollama_utils_update.py     # run-from-source shim
 ├── pyproject.toml
 └── README.md
 ```
@@ -206,7 +208,19 @@ The report also records the effective API base URL, timeout, VRAM policy, and se
 
 This repo requires only the Python standard library at runtime. There is one optional system dependency for VRAM measurement on NVIDIA hardware.
 
-Quick syntax check:
+Install in editable mode with dev dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+Quick syntax check (no install required):
 
 ```bash
 python3 -m py_compile \
