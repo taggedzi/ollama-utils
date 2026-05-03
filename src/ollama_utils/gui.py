@@ -139,7 +139,7 @@ class OllamaUtilsApp:
 
         self.ttk.Label(
             header,
-            text="ollama-utils Console",
+            text="Ollama Utilites Console",
             style="Title.TLabel",
         ).grid(row=0, column=0, sticky="w")
         self.ttk.Label(

@@ -2,6 +2,7 @@ import pytest
 
 from ollama_utils.test_models import (
     classify_failure,
+    model_supports_embeddings,
     normalize_ollama_api_base_url,
     parse_parameters_text,
 )
@@ -92,3 +93,17 @@ def test_classify_unknown_error_zero_returncode():
 
 def test_classify_unknown_error_none_returncode():
     assert classify_failure("some generic error", None) == "unknown_error"
+
+
+# --- model_supports_embeddings ---
+
+def test_model_supports_embeddings_true_for_embedding_capability():
+    assert model_supports_embeddings({"capabilities": ["completion", "embedding"]}) is True
+
+
+def test_model_supports_embeddings_false_for_non_embedding_capabilities():
+    assert model_supports_embeddings({"capabilities": ["completion", "tools"]}) is False
+
+
+def test_model_supports_embeddings_false_for_missing_metadata():
+    assert model_supports_embeddings(None) is False

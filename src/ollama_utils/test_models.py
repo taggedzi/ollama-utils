@@ -100,6 +100,10 @@ def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT
         ) from exc
 
 
+def api_command_label(method, api_base_url, path, model, prompt):
+    return [method, f"{api_base_url}{path}", model, prompt]
+
+
 def is_api_unreachable_error(message):
     cleaned = clean_text(message)
     return cleaned.startswith("Unable to reach Ollama API ") or cleaned.startswith(
@@ -582,8 +586,82 @@ def run_model_command(model, prompt, timeout_seconds, stop_requested=None):
     }
 
 
-def test_model(model, timeout_seconds, warnings, stop_requested=None):
+def run_model_api_command(model, prompt, timeout_seconds, api_base_url, path):
+    command = api_command_label("POST", api_base_url, path, model, prompt)
+    payload = {"model": model, "stream": False}
+
+    if path == "/generate":
+        payload["prompt"] = prompt
+    elif path == "/embed":
+        payload["input"] = prompt
+    else:
+        raise ValueError(f"Unsupported Ollama API path: {path}")
+
+    try:
+        response = run_ollama_api(
+            "POST",
+            path,
+            api_base_url=api_base_url,
+            payload=payload,
+            timeout=timeout_seconds,
+        )
+    except RuntimeError as exc:
+        return {
+            "ok": False,
+            "command": command,
+            "returncode": None,
+            "error": str(exc),
+            "output": "",
+        }
+
+    if path == "/generate":
+        output = clean_text(response.get("response"))
+        return {
+            "ok": bool(response.get("done")),
+            "command": command,
+            "returncode": 0 if response.get("done") else None,
+            "error": "" if response.get("done") else "Ollama API generate did not finish.",
+            "output": output,
+        }
+
+    embeddings = response.get("embeddings")
+    if isinstance(embeddings, list) and embeddings:
+        return {
+            "ok": True,
+            "command": command,
+            "returncode": 0,
+            "error": "",
+            "output": f"Generated {len(embeddings)} embedding(s).",
+        }
+
+    return {
+        "ok": False,
+        "command": command,
+        "returncode": None,
+        "error": "Ollama API embed did not return embeddings.",
+        "output": clean_text(json.dumps(response, ensure_ascii=False)),
+    }
+
+
+def model_supports_embeddings(model_metadata):
+    if not isinstance(model_metadata, dict):
+        return False
+
+    capabilities = model_metadata.get("capabilities") or []
+    return "embedding" in capabilities or "embeddings" in capabilities
+
+
+def test_model(
+    model,
+    timeout_seconds,
+    warnings,
+    api_base_url=None,
+    api_server_available=False,
+    model_metadata=None,
+    stop_requested=None,
+):
     attempts = []
+    embedding_capability = model_supports_embeddings(model_metadata)
 
     if not model:
         failure = build_failure(
@@ -596,13 +674,28 @@ def test_model(model, timeout_seconds, warnings, stop_requested=None):
         )
         return {"status": "failed", "attempts": attempts, "failure": failure}
 
-    first_attempt = run_model_command(
-        model,
-        SMOKE_TEST_PROMPT,
-        timeout_seconds,
-        stop_requested=stop_requested,
+    initial_prompt = EMBEDDING_SAMPLE_TEXT if embedding_capability else SMOKE_TEST_PROMPT
+    initial_prompt_label = (
+        "embedding_sample_text" if embedding_capability else "smoke_test_prompt"
     )
-    attempts.append(build_attempt(first_attempt, "smoke_test_prompt", SMOKE_TEST_PROMPT))
+
+    if api_server_available and api_base_url:
+        first_path = "/embed" if embedding_capability else "/generate"
+        first_attempt = run_model_api_command(
+            model,
+            initial_prompt,
+            timeout_seconds,
+            api_base_url,
+            first_path,
+        )
+    else:
+        first_attempt = run_model_command(
+            model,
+            initial_prompt,
+            timeout_seconds,
+            stop_requested=stop_requested,
+        )
+    attempts.append(build_attempt(first_attempt, initial_prompt_label, initial_prompt))
 
     if first_attempt["error"] == "Run cancelled by user":
         raise StopRequested
@@ -611,12 +704,21 @@ def test_model(model, timeout_seconds, warnings, stop_requested=None):
         not first_attempt["ok"]
         and "embedding models require input text" in first_attempt["error"]
     ):
-        retry_attempt = run_model_command(
-            model,
-            EMBEDDING_SAMPLE_TEXT,
-            timeout_seconds,
-            stop_requested=stop_requested,
-        )
+        if api_server_available and api_base_url:
+            retry_attempt = run_model_api_command(
+                model,
+                EMBEDDING_SAMPLE_TEXT,
+                timeout_seconds,
+                api_base_url,
+                "/embed",
+            )
+        else:
+            retry_attempt = run_model_command(
+                model,
+                EMBEDDING_SAMPLE_TEXT,
+                timeout_seconds,
+                stop_requested=stop_requested,
+            )
         attempts.append(
             build_attempt(retry_attempt, "embedding_sample_text", EMBEDDING_SAMPLE_TEXT)
         )
@@ -865,6 +967,9 @@ def main(argv=None, emit=None, stop_requested=None):
                 model,
                 args.timeout_seconds,
                 warnings,
+                api_base_url=api_base_url,
+                api_server_available=api_server_available,
+                model_metadata=metadata,
                 stop_requested=stop_requested,
             )
             tested_models += 1
