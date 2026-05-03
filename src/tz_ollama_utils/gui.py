@@ -26,9 +26,9 @@ def _asset_roots():
     if bundle_root:
         roots.append(Path(bundle_root) / "assets")
 
-    package_assets = Path(__file__).resolve().parent / "assets"
     repo_assets = Path(__file__).resolve().parents[2] / "assets"
-    roots.extend([package_assets, repo_assets])
+    package_assets = Path(__file__).resolve().parent / "assets"
+    roots.extend([repo_assets, package_assets])
 
     deduped_roots = []
     seen = set()
@@ -440,7 +440,7 @@ class OllamaUtilsApp:
         return self.ttk.Frame(parent, style="Card.TFrame", padding=padding)
 
     def _load_header_logo(self):
-        logo_path = _find_asset("icons", "tz-ollama-utils.png")
+        logo_path = _find_asset("icons", "tz-ollama-utils-header-88px.png")
         if logo_path is None:
             return None
 
@@ -448,21 +448,9 @@ class OllamaUtilsApp:
             image = self.tk.PhotoImage(file=str(logo_path))
         except self.tk.TclError:
             return None
-
-        if image.width() > 88:
-            scale = max(1, (image.width() + 87) // 88)
-            image = image.subsample(scale, scale)
         return image
 
     def _apply_window_icon(self):
-        icon_path = _find_asset("icons", "tz-ollama-utils.png")
-        if icon_path is not None:
-            try:
-                self.window_icon = self.tk.PhotoImage(file=str(icon_path))
-                self.root.iconphoto(True, self.window_icon)
-            except self.tk.TclError:
-                self.window_icon = None
-
         if sys.platform.startswith("win"):
             bitmap_path = _find_asset("icons", "tz_ollama_utils_icon.ico")
             if bitmap_path is not None:
@@ -470,6 +458,14 @@ class OllamaUtilsApp:
                     self.root.iconbitmap(default=str(bitmap_path))
                 except self.tk.TclError:
                     pass
+
+        icon_path = _find_asset("icons", "tz-ollama-utils.png")
+        if icon_path is not None:
+            try:
+                self.window_icon = self.tk.PhotoImage(file=str(icon_path))
+                self.root.iconphoto(True, self.window_icon)
+            except self.tk.TclError:
+                self.window_icon = None
 
     def _load_versions(self):
         def worker():

@@ -32,9 +32,11 @@ Homepage = "https://github.com/taggedzi/tz-ollama-utils"
 
 [project.optional-dependencies]
 build = [
+  "Pillow>=10.0",
   "pyinstaller>=6.0",
 ]
 dev = [
+  "Pillow>=10.0",
   "pytest>=8.0",
   "ruff>=0.4",
 ]
