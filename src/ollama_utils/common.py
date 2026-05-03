@@ -8,7 +8,6 @@ from datetime import datetime
 
 OUTPUT_PREVIEW_LIMIT = 500
 TEXT_FIELD_PREVIEW_LIMIT = 2000
-LIST_PREVIEW_LIMIT = 25
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 SPINNER_GLYPH_RE = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]")
 
@@ -107,18 +106,6 @@ def truncate_with_metadata(value, limit=TEXT_FIELD_PREVIEW_LIMIT):
         "preview": text[: limit - 3] + "...",
         "truncated": True,
         "original_length": len(text),
-    }
-
-
-def summarize_list(values, preview_limit=LIST_PREVIEW_LIMIT):
-    values = list(values)
-    preview = values[:preview_limit]
-    remainder = len(values) - len(preview)
-    return {
-        "count": len(values),
-        "preview": preview,
-        "truncated": remainder > 0,
-        "omitted_count": remainder if remainder > 0 else 0,
     }
 
 
