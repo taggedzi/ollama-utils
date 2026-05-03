@@ -102,6 +102,21 @@ def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT
         ) from exc
 
 
+def is_api_unreachable_error(message):
+    cleaned = clean_text(message)
+    return cleaned.startswith("Unable to reach Ollama API ") or cleaned.startswith(
+        "Unable to call Ollama API "
+    )
+
+
+def check_ollama_server(api_base_url):
+    try:
+        run_ollama_api("GET", "/tags", api_base_url=api_base_url)
+    except RuntimeError as exc:
+        return False, str(exc)
+    return True, None
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -733,8 +748,19 @@ def main(argv=None, emit=None, stop_requested=None):
     device_vram_bytes = None
     device_vram_source = "unavailable"
     inventory_source = "unknown"
+    api_server_available = True
     report_path = args.report_path.resolve()
     api_base_url = args.api_base_url
+
+    api_server_available, server_error = check_ollama_server(api_base_url)
+    if not api_server_available:
+        guidance = (
+            "Ollama API server was not reachable at startup. Start the Ollama app or "
+            f"server so {api_base_url} is available."
+        )
+        emit(guidance)
+        add_warning(warnings, "api_server", guidance)
+        add_warning(warnings, "api_server", server_error)
 
     try:
         models, inventory_source, inventory_warnings = get_models(api_base_url)
@@ -790,14 +816,20 @@ def main(argv=None, emit=None, stop_requested=None):
 
             metadata = None
             metadata_error = None
-            try:
-                metadata = get_model_metadata(model, api_base_url)
-            except RuntimeError as exc:
-                metadata_error = str(exc)
-                add_warning(
-                    warnings,
-                    "model_metadata",
-                    f"Unable to fetch metadata for model {model!r}: {exc}",
+            if api_server_available:
+                try:
+                    metadata = get_model_metadata(model, api_base_url)
+                except RuntimeError as exc:
+                    metadata_error = str(exc)
+                    add_warning(
+                        warnings,
+                        "model_metadata",
+                        f"Unable to fetch metadata for model {model!r}: {exc}",
+                    )
+            else:
+                metadata_error = (
+                    "Skipped metadata fetch because the Ollama API server was unavailable "
+                    "at startup."
                 )
 
             model_record = build_model_record(
@@ -861,6 +893,7 @@ def main(argv=None, emit=None, stop_requested=None):
         "generated_at": timestamp_now(),
         "report_path": str(report_path),
         "api_base_url": api_base_url,
+        "api_server_available": api_server_available,
         "inventory_source": inventory_source,
         "timeout_seconds": args.timeout_seconds,
         "fit_vram": args.fit_vram,

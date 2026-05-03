@@ -115,6 +115,7 @@ Default behavior:
 
 - attempts to measure total device VRAM once at startup using `nvidia-smi`
 - uses the Ollama HTTP API for inventory details, but falls back to `ollama list` if the API inventory is unavailable or incomplete
+- checks whether the Ollama API server is reachable before testing and warns clearly when it is not running
 - skips models whose stored size exceeds startup device VRAM when VRAM detection is available
 - fetches concise metadata from the Ollama API
 - smoke-tests runnable models with `ollama run`
@@ -160,6 +161,7 @@ GUI notes:
 - the Ollama API base URL field is session-scoped and resets to the default on application restart
 - the update tab uses the local `ollama` CLI
 - the test tab prefers the configured Ollama HTTP API base URL for inventory details and metadata, but falls back to `ollama list` when the API inventory is unavailable or returns fewer models than the CLI
+- the test tab warns at startup when the configured Ollama API server is not reachable, which usually means the Ollama app or server needs to be started manually
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 
 ## YAML Report
