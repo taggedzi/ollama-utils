@@ -53,7 +53,8 @@ def pull_model(model, index, total, emit, stop_requested=None):
         **subprocess_window_kwargs(),
     )
 
-    assert process.stdout is not None
+    if process.stdout is None:
+        raise RuntimeError("subprocess stdout pipe was not created")
 
     while True:
         if stop_requested and stop_requested():
@@ -81,7 +82,6 @@ def pull_model(model, index, total, emit, stop_requested=None):
 
 
 def main(argv=None, emit=None, stop_requested=None):
-    del argv
     emit = emit or default_emit
 
     try:
