@@ -19,7 +19,7 @@ from .common import truncate_with_metadata
 from .common import yaml_dump_lines
 
 DEFAULT_TIMEOUT_SECONDS = 300
-DEFAULT_REPORT_PATH = Path("ollama_model_failures.yaml")
+DEFAULT_REPORT_PATH = Path("model_report.yaml")
 SMOKE_TEST_PROMPT = "Respond with exactly OK."
 EMBEDDING_SAMPLE_TEXT = "test"
 API_TIMEOUT_SECONDS = 30

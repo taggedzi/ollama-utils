@@ -27,7 +27,7 @@ class OllamaUtilsApp:
         import tkinter.filedialog as _fd
         self.filedialog = _fd
         self.root = root
-        self.root.title("tz-ollama-utils")
+        self.root.title("Taggedz's Ollama Utilities")
         self.root.geometry("1040x780")
         self.root.minsize(900, 640)
         self.root.configure(bg=APP_BG)
