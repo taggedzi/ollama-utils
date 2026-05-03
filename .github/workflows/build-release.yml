@@ -16,14 +16,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: ollama-maintenance-linux
-            binary_name: ollama-maintenance
+            artifact_name: ollama-utils-linux
+            binary_name: ollama-utils
           - os: windows-latest
-            artifact_name: ollama-maintenance-windows
-            binary_name: ollama-maintenance.exe
+            artifact_name: ollama-utils-windows
+            binary_name: ollama-utils.exe
           - os: macos-latest
-            artifact_name: ollama-maintenance-macos
-            binary_name: ollama-maintenance
+            artifact_name: ollama-utils-macos
+            binary_name: ollama-utils
 
     runs-on: ${{ matrix.os }}
 
@@ -55,8 +55,8 @@ jobs:
           --clean
           --onefile
           --windowed
-          --name ollama-maintenance
-          ollama_maintenance_gui.py
+          --name ollama-utils
+          ollama_utils_gui.py
 
       - name: Package release asset
         shell: bash

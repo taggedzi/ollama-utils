@@ -18,6 +18,7 @@ from .common import yaml_dump_lines
 
 DEFAULT_TIMEOUT_SECONDS = 300
 FAILURE_LOG = Path("ollama_model_failures.yaml")
+SMOKE_TEST_PROMPT = "Respond with exactly OK."
 EMBEDDING_SAMPLE_TEXT = "test"
 API_TIMEOUT_SECONDS = 30
 STOP_TIMEOUT_SECONDS = 30
@@ -422,6 +423,7 @@ def run_model_command(model, prompt, timeout_seconds, stop_requested=None):
             actual_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
             text=True,
             encoding="utf-8",
             errors="replace",
@@ -508,11 +510,11 @@ def test_model(model, timeout_seconds, warnings, stop_requested=None):
 
     first_attempt = run_model_command(
         model,
-        "",
+        SMOKE_TEST_PROMPT,
         timeout_seconds,
         stop_requested=stop_requested,
     )
-    attempts.append(build_attempt(first_attempt, "empty_prompt", ""))
+    attempts.append(build_attempt(first_attempt, "smoke_test_prompt", SMOKE_TEST_PROMPT))
 
     if first_attempt["error"] == "Run cancelled by user":
         raise KeyboardInterrupt

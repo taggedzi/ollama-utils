@@ -1,4 +1,4 @@
-# Ollama Utilities
+# ollama-utils
 
 Small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
 
@@ -7,9 +7,9 @@ Small local utilities for maintaining [Ollama](https://ollama.com/) model librar
 
 This repository currently includes:
 
-- `update_ollama_models.py`: updates every locally installed Ollama model with `ollama pull`
-- `test_ollama_models.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
-- `ollama_maintenance_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
+- `ollama_utils_update.py`: updates every locally installed Ollama model with `ollama pull`
+- `ollama_utils_test.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
+- `ollama_utils_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
 
 ## What This Repo Is For
 
@@ -49,20 +49,20 @@ This project uses standard-library Python only, but it does depend on external s
 - `ollama`
 - optional: `nvidia-smi`
 
-If `nvidia-smi` is available, `test_ollama_models.py` measures total GPU VRAM at startup and can filter models against that size. If `nvidia-smi` is unavailable, the script continues without size filtering and records a warning in the YAML report.
+If `nvidia-smi` is available, `ollama_utils_test.py` measures total GPU VRAM at startup and can filter models against that size. If `nvidia-smi` is unavailable, the script continues without size filtering and records a warning in the YAML report.
 
 ## Repository Layout
 
 ```text
 .
-├── src/ollama_maintenance/
+├── src/ollama_utils/
 │   ├── gui.py
 │   ├── test_models.py
 │   └── update_models.py
 ├── .github/workflows/build-release.yml
-├── ollama_maintenance_gui.py
-├── test_ollama_models.py
-├── update_ollama_models.py
+├── ollama_utils_gui.py
+├── ollama_utils_test.py
+├── ollama_utils_update.py
 ├── pyproject.toml
 └── README.md
 ```
@@ -72,13 +72,13 @@ If `nvidia-smi` is available, `test_ollama_models.py` measures total GPU VRAM at
 ### Update Installed Models
 
 ```bash
-python3 update_ollama_models.py
+python3 ollama_utils_update.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-maintenance-update
+ollama-utils-update
 ```
 
 This script:
@@ -91,24 +91,24 @@ This script:
 ### Test and Inventory Installed Models
 
 ```bash
-python3 test_ollama_models.py
+python3 ollama_utils_test.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-maintenance-test
+ollama-utils-test
 ```
 
 Optional examples:
 
 ```bash
-python3 test_ollama_models.py 600
-python3 test_ollama_models.py --ignore-size
-python3 test_ollama_models.py 600 --ignore-size
-python3 test_ollama_models.py 600 --vram-mib 16384 --report-path custom-report.yaml
-python3 test_ollama_models.py 600 --api-base-url http://192.168.1.25:11434
-python3 test_ollama_models.py 600 --api-base-url http://192.168.1.25:11434/api
+python3 ollama_utils_test.py 600
+python3 ollama_utils_test.py --ignore-size
+python3 ollama_utils_test.py 600 --ignore-size
+python3 ollama_utils_test.py 600 --vram-mib 16384 --report-path custom-report.yaml
+python3 ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434
+python3 ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434/api
 ```
 
 Default behavior:
@@ -132,13 +132,13 @@ Useful CLI options:
 Run the GUI from source:
 
 ```bash
-python3 ollama_maintenance_gui.py
+python3 ollama_utils_gui.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-maintenance-gui
+ollama-utils-gui
 ```
 
 The GUI provides:
@@ -191,8 +191,8 @@ The report also records the effective API base URL, timeout, VRAM policy, and se
 
 ## Notes and Limitations
 
-- `test_ollama_models.py` depends on the local Ollama HTTP API and the `ollama` CLI.
-- `update_ollama_models.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
+- `ollama_utils_test.py` depends on the local Ollama HTTP API and the `ollama` CLI.
+- `ollama_utils_update.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
 - `nvidia-smi` is optional. When present, VRAM filtering currently uses the largest `memory.total` value returned by `nvidia-smi`.
 - If `nvidia-smi` is unavailable, the script continues without size filtering and records that as a warning.
 - The smoke test is intentionally shallow: it is meant to catch obviously broken models, not benchmark quality.
@@ -206,10 +206,10 @@ Quick syntax check:
 
 ```bash
 python3 -m py_compile \
-  update_ollama_models.py \
-  test_ollama_models.py \
-  ollama_maintenance_gui.py \
-  src/ollama_maintenance/*.py
+  ollama_utils_update.py \
+  ollama_utils_test.py \
+  ollama_utils_gui.py \
+  src/ollama_utils/*.py
 ```
 
 ## Building Standalone Binaries
@@ -218,7 +218,7 @@ Local build:
 
 ```bash
 python3 -m pip install .[build]
-pyinstaller --noconfirm --clean --onefile --windowed --name ollama-maintenance ollama_maintenance_gui.py
+pyinstaller --noconfirm --clean --onefile --windowed --name ollama-utils ollama_utils_gui.py
 ```
 
 The generated binary appears under `dist/`.

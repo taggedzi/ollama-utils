@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ollama-maintenance"
+name = "ollama-utils"
 version = "0.2.1"
 description = "Local CLI and GUI utilities for updating, inventorying, and smoke-testing Ollama models."
 readme = "README.md"
@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [
   { name = "Repository Maintainer" }
 ]
-keywords = ["ollama", "llm", "models", "inventory", "maintenance"]
+keywords = ["ollama", "llm", "models", "inventory", "utilities"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -29,9 +29,9 @@ build = [
 ]
 
 [project.scripts]
-ollama-maintenance-update = "ollama_maintenance.update_models:main"
-ollama-maintenance-test = "ollama_maintenance.test_models:main"
-ollama-maintenance-gui = "ollama_maintenance.gui:main"
+ollama-utils-update = "ollama_utils.update_models:main"
+ollama-utils-test = "ollama_utils.test_models:main"
+ollama-utils-gui = "ollama_utils.gui:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

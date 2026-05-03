@@ -20,12 +20,12 @@ LOG_BG = "#16181C"
 LOG_FG = "#F5EBDD"
 
 
-class OllamaMaintenanceApp:
+class OllamaUtilsApp:
     def __init__(self, root, tk_module, ttk_module):
         self.tk = tk_module
         self.ttk = ttk_module
         self.root = root
-        self.root.title("Ollama Maintenance")
+        self.root.title("ollama-utils")
         self.root.geometry("1040x780")
         self.root.minsize(900, 640)
         self.root.configure(bg=APP_BG)
@@ -137,7 +137,7 @@ class OllamaMaintenanceApp:
 
         self.ttk.Label(
             header,
-            text="Ollama Maintenance Console",
+            text="ollama-utils Console",
             style="Title.TLabel",
         ).grid(row=0, column=0, sticky="w")
         self.ttk.Label(
@@ -510,7 +510,7 @@ class OllamaMaintenanceApp:
         self._run_worker(
             "Update",
             lambda emit, stop_requested: update_main(
-                ["ollama-maintenance-update"],
+                ["ollama-utils-update"],
                 emit,
                 stop_requested=stop_requested,
             ),
@@ -560,7 +560,7 @@ class OllamaMaintenanceApp:
             self.status_var.set("Invalid API URL")
             return
 
-        argv = ["ollama-maintenance-test", str(timeout)]
+        argv = ["ollama-utils-test", str(timeout)]
         if self.ignore_size_var.get():
             argv.append("--ignore-size")
         if vram_override is not None:
@@ -591,7 +591,7 @@ def main():
         return 1
 
     root = tk.Tk()
-    app = OllamaMaintenanceApp(root, tk, ttk)
+    app = OllamaUtilsApp(root, tk, ttk)
     del app
     root.mainloop()
     return 0
