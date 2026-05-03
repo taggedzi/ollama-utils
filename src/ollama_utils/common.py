@@ -6,6 +6,11 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+
+class StopRequested(Exception):
+    pass
+
+
 OUTPUT_PREVIEW_LIMIT = 500
 TEXT_FIELD_PREVIEW_LIMIT = 2000
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")

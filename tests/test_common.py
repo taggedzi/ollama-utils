@@ -185,3 +185,17 @@ def test_yaml_dump_lines_scalar():
 
 def test_yaml_dump_lines_indent():
     assert yaml_dump_lines({"a": 1}, indent=2) == ['  a: 1']
+
+
+# --- StopRequested ---
+
+def test_stop_requested_is_exception():
+    from ollama_utils.common import StopRequested
+    assert issubclass(StopRequested, Exception)
+
+
+def test_stop_requested_can_be_raised_and_caught():
+    from ollama_utils.common import StopRequested
+    import pytest
+    with pytest.raises(StopRequested):
+        raise StopRequested

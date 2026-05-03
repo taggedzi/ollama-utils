@@ -5,6 +5,7 @@ from datetime import datetime
 
 from .common import clean_text
 from .common import default_emit
+from .common import StopRequested
 from .common import subprocess_window_kwargs
 from .common import tool_command
 
@@ -62,7 +63,7 @@ def pull_model(model, index, total, emit, stop_requested=None):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait()
-            raise KeyboardInterrupt
+            raise StopRequested
 
         line = process.stdout.readline()
         if not line:
@@ -99,7 +100,7 @@ def main(argv=None, emit=None, stop_requested=None):
     try:
         for index, model in enumerate(models, start=1):
             if stop_requested and stop_requested():
-                raise KeyboardInterrupt
+                raise StopRequested
 
             try:
                 returncode = pull_model(
@@ -119,7 +120,7 @@ def main(argv=None, emit=None, stop_requested=None):
             else:
                 log(f"FAILED {model} with exit code {returncode}", emit)
                 failures.append(model)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, StopRequested):
         log("Interrupted. Update stopped before processing all models.", emit)
         return 130
 
