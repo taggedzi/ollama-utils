@@ -196,6 +196,5 @@ def test_stop_requested_is_exception():
 
 def test_stop_requested_can_be_raised_and_caught():
     from ollama_utils.common import StopRequested
-    import pytest
     with pytest.raises(StopRequested):
         raise StopRequested
