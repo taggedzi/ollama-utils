@@ -20,12 +20,23 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Utilities",
 ]
+
+[project.urls]
+Homepage = "https://github.com/taggedzi/ollama-utils"
+"Bug Tracker" = "https://github.com/taggedzi/ollama-utils/issues"
 
 [project.optional-dependencies]
 build = [
   "pyinstaller>=6.0",
+]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4",
 ]
 
 [project.scripts]
@@ -38,6 +49,9 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
