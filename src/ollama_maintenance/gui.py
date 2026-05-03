@@ -315,7 +315,16 @@ class OllamaMaintenanceApp:
             command=self.run_test,
             style="Action.TButton",
         )
-        self.test_button.grid(row=3, column=0, columnspan=2, pady=(16, 0), sticky="ew")
+        self.test_button.grid(row=3, column=0, columnspan=2, pady=(16, 10), sticky="ew")
+
+        self.test_stop_button = self.ttk.Button(
+            report,
+            text="Stop Test Job",
+            command=self.stop_run,
+            state="disabled",
+            style="Quiet.TButton",
+        )
+        self.test_stop_button.grid(row=4, column=0, columnspan=2, sticky="ew")
 
     def _build_activity_area(self):
         activity = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 0, 18, 10))
@@ -415,6 +424,7 @@ class OllamaMaintenanceApp:
         self.update_button.configure(state=action_state)
         self.test_button.configure(state=action_state)
         self.stop_button.configure(state=stop_state)
+        self.test_stop_button.configure(state=stop_state)
 
     def _drain_log_queue(self):
         while True:

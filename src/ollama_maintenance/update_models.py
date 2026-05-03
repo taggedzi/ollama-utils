@@ -4,6 +4,8 @@ import time
 from datetime import datetime
 
 from .common import clean_text
+from .common import subprocess_window_kwargs
+from .common import tool_command
 
 
 def default_emit(message):
@@ -17,12 +19,13 @@ def log(message, emit):
 
 def get_models():
     result = subprocess.run(
-        ["ollama", "list"],
+        tool_command("ollama", "list"),
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        **subprocess_window_kwargs(),
     )
 
     if result.returncode != 0:
@@ -43,12 +46,13 @@ def pull_model(model, index, total, emit, stop_requested=None):
     log(f"[{index}/{total}] Updating {model}", emit)
 
     process = subprocess.Popen(
-        ["ollama", "pull", model],
+        tool_command("ollama", "pull", model),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         encoding="utf-8",
         errors="replace",
+        **subprocess_window_kwargs(),
     )
 
     assert process.stdout is not None

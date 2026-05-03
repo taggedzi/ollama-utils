@@ -1,5 +1,9 @@
+import os
 import re
+import shutil
 import subprocess
+import sys
+from pathlib import Path
 from datetime import datetime
 
 OUTPUT_PREVIEW_LIMIT = 500
@@ -136,12 +140,13 @@ def format_bytes(num_bytes):
 def detect_ollama_version(timeout=5):
     try:
         result = subprocess.run(
-            ["ollama", "--version"],
+            tool_command("ollama", "--version"),
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            **subprocess_window_kwargs(),
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return None
@@ -151,3 +156,47 @@ def detect_ollama_version(timeout=5):
         return None
 
     return output
+
+
+def subprocess_window_kwargs():
+    if os.name != "nt":
+        return {}
+
+    kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
+def _windows_tool_candidates(tool_name):
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    program_files = os.environ.get("ProgramFiles", "")
+
+    candidates = {
+        "ollama": [
+            Path(local_app_data) / "Programs" / "Ollama" / "ollama.exe",
+            Path(program_files) / "Ollama" / "ollama.exe",
+        ],
+        "nvidia-smi": [
+            Path(program_files) / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe",
+        ],
+    }
+    return candidates.get(tool_name, [])
+
+
+def resolve_tool_path(tool_name):
+    resolved = shutil.which(tool_name)
+    if resolved:
+        return resolved
+
+    if os.name == "nt":
+        for candidate in _windows_tool_candidates(tool_name):
+            if candidate.is_file():
+                return str(candidate)
+
+    return tool_name
+
+
+def tool_command(tool_name, *args):
+    return [resolve_tool_path(tool_name), *args]

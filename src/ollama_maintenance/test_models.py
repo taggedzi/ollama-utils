@@ -9,7 +9,9 @@ from urllib import request as urllib_request
 
 from .common import clean_text
 from .common import format_bytes
+from .common import subprocess_window_kwargs
 from .common import timestamp_now
+from .common import tool_command
 from .common import truncate_text
 from .common import truncate_with_metadata
 from .common import yaml_dump_lines
@@ -53,6 +55,7 @@ def run_cmd(args, timeout, input_text=None):
         timeout=timeout,
         encoding="utf-8",
         errors="replace",
+        **subprocess_window_kwargs(),
     )
 
 
@@ -365,11 +368,11 @@ def get_model_metadata(model_name, api_base_url):
 
 
 def get_device_vram_bytes():
-    command = [
+    command = tool_command(
         "nvidia-smi",
         "--query-gpu=memory.total",
         "--format=csv,noheader,nounits",
-    ]
+    )
 
     try:
         result = run_cmd(command, timeout=NVIDIA_SMI_TIMEOUT_SECONDS)
@@ -412,15 +415,17 @@ def resolve_device_vram_bytes(args):
 
 def run_model_command(model, prompt, timeout_seconds, stop_requested=None):
     command = ["ollama", "run", model, prompt]
+    actual_command = tool_command("ollama", "run", model, prompt)
 
     try:
         process = subprocess.Popen(
-            command,
+            actual_command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
+            **subprocess_window_kwargs(),
         )
     except FileNotFoundError:
         return {
