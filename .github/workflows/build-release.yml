@@ -21,9 +21,6 @@ jobs:
           - os: windows-latest
             artifact_name: ollama-utils-windows
             binary_name: ollama-utils.exe
-          - os: macos-latest
-            artifact_name: ollama-utils-macos
-            binary_name: ollama-utils
 
     runs-on: ${{ matrix.os }}
 

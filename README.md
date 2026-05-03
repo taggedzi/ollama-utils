@@ -248,7 +248,7 @@ The binary launches the GUI entry point and is intended for desktop use.
 
 GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/workflows/build-release.yml), which:
 
-- builds the GUI binary on Windows, macOS, and Linux
+- builds the GUI binary on Windows and Linux
 - uploads each build as a workflow artifact
 - attaches packaged release assets automatically when you push a tag like `v0.2.0`
 - verifies that `tkinter` is available in the build environment before packaging
