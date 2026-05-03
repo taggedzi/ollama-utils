@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-from ollama_utils.gui import main
+from tz_ollama_utils.gui import main
 
 
 if __name__ == "__main__":

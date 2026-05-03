@@ -27,7 +27,7 @@ class OllamaUtilsApp:
         import tkinter.filedialog as _fd
         self.filedialog = _fd
         self.root = root
-        self.root.title("ollama-utils")
+        self.root.title("tz-ollama-utils")
         self.root.geometry("1040x780")
         self.root.minsize(900, 640)
         self.root.configure(bg=APP_BG)
@@ -139,7 +139,7 @@ class OllamaUtilsApp:
 
         self.ttk.Label(
             header,
-            text="Ollama Utilites Console",
+            text="TaggedZ's Ollama Utilities",
             style="Title.TLabel",
         ).grid(row=0, column=0, sticky="w")
         self.ttk.Label(
@@ -512,7 +512,7 @@ class OllamaUtilsApp:
         self._run_worker(
             "Update",
             lambda emit, stop_requested: update_main(
-                ["ollama-utils-update"],
+                ["tz-ollama-utils-update"],
                 emit,
                 stop_requested=stop_requested,
             ),
@@ -560,7 +560,7 @@ class OllamaUtilsApp:
             self.status_var.set("Invalid API URL")
             return
 
-        argv = ["ollama-utils-test", str(timeout)]
+        argv = ["tz-ollama-utils-test", str(timeout)]
         if self.ignore_size_var.get():
             argv.append("--ignore-size")
         if vram_override is not None:

@@ -1,7 +1,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("ollama-utils")
+    __version__ = version("tz-ollama-utils")
 except PackageNotFoundError:
     __version__ = "dev"
 

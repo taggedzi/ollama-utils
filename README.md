@@ -1,15 +1,15 @@
-# ollama-utils
+# tz-ollama-utils
 
-Small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
+TaggedZ's Ollama Utilities: small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
 
 > Disclaimer:
 > This project is an independent utility and is not part of Ollama, is not endorsed by Ollama, and has no affiliation with Ollama.
 
 This repository currently includes:
 
-- `ollama_utils_update.py`: updates every locally installed Ollama model with `ollama pull`
-- `ollama_utils_test.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
-- `ollama_utils_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
+- `tz_ollama_utils_update.py`: updates every locally installed Ollama model with `ollama pull`
+- `tz_ollama_utils_test.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
+- `tz_ollama_utils_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
 
 ## What This Repo Is For
 
@@ -49,22 +49,22 @@ This project uses standard-library Python only, but it does depend on external s
 - `ollama`
 - optional: `nvidia-smi`
 
-If `nvidia-smi` is available, `ollama_utils_test.py` measures total GPU VRAM at startup and can filter models against that size. If `nvidia-smi` is unavailable, the script continues without size filtering and records a warning in the YAML report.
+If `nvidia-smi` is available, `tz_ollama_utils_test.py` measures total GPU VRAM at startup and can filter models against that size. If `nvidia-smi` is unavailable, the script continues without size filtering and records a warning in the YAML report.
 
 ## Repository Layout
 
 ```text
 .
-├── src/ollama_utils/          # installable package
+├── src/tz_ollama_utils/       # installable package
 │   ├── common.py
 │   ├── gui.py
 │   ├── test_models.py
 │   └── update_models.py
 ├── tests/                     # pytest test suite
 ├── .github/workflows/build-release.yml
-├── ollama_utils_gui.py        # run-from-source shim
-├── ollama_utils_test.py       # run-from-source shim
-├── ollama_utils_update.py     # run-from-source shim
+├── tz_ollama_utils_gui.py     # run-from-source shim
+├── tz_ollama_utils_test.py    # run-from-source shim
+├── tz_ollama_utils_update.py  # run-from-source shim
 ├── pyproject.toml
 └── README.md
 ```
@@ -74,13 +74,13 @@ If `nvidia-smi` is available, `ollama_utils_test.py` measures total GPU VRAM at 
 ### Update Installed Models
 
 ```bash
-python3 ollama_utils_update.py
+python3 tz_ollama_utils_update.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-utils-update
+tz-ollama-utils-update
 ```
 
 This script:
@@ -93,24 +93,24 @@ This script:
 ### Test and Inventory Installed Models
 
 ```bash
-python3 ollama_utils_test.py
+python3 tz_ollama_utils_test.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-utils-test
+tz-ollama-utils-test
 ```
 
 Optional examples:
 
 ```bash
-python3 ollama_utils_test.py 600
-python3 ollama_utils_test.py --ignore-size
-python3 ollama_utils_test.py 600 --ignore-size
-python3 ollama_utils_test.py 600 --vram-mib 16384 --report-path custom-report.yaml
-python3 ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434
-python3 ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434/api
+python3 tz_ollama_utils_test.py 600
+python3 tz_ollama_utils_test.py --ignore-size
+python3 tz_ollama_utils_test.py 600 --ignore-size
+python3 tz_ollama_utils_test.py 600 --vram-mib 16384 --report-path custom-report.yaml
+python3 tz_ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434
+python3 tz_ollama_utils_test.py 600 --api-base-url http://192.168.1.25:11434/api
 ```
 
 Default behavior:
@@ -137,13 +137,13 @@ Useful CLI options:
 Run the GUI from source:
 
 ```bash
-python3 ollama_utils_gui.py
+python3 tz_ollama_utils_gui.py
 ```
 
 Installed entry point:
 
 ```bash
-ollama-utils-gui
+tz-ollama-utils-gui
 ```
 
 The GUI provides:
@@ -198,8 +198,8 @@ The report also records the effective API base URL, timeout, VRAM policy, and se
 
 ## Notes and Limitations
 
-- `ollama_utils_test.py` prefers the Ollama HTTP API for inventory, metadata, and model execution. It still uses the local `ollama` CLI for inventory comparison and as a fallback execution path when the API is unavailable.
-- `ollama_utils_update.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
+- `tz_ollama_utils_test.py` prefers the Ollama HTTP API for inventory, metadata, and model execution. It still uses the local `ollama` CLI for inventory comparison and as a fallback execution path when the API is unavailable.
+- `tz_ollama_utils_update.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
 - `nvidia-smi` is optional. When present, VRAM filtering currently uses the largest `memory.total` value returned by `nvidia-smi`.
 - If `nvidia-smi` is unavailable, the script continues without size filtering and records that as a warning.
 - The smoke test is intentionally shallow: it is meant to catch obviously broken models, not benchmark quality.
@@ -225,10 +225,10 @@ Quick syntax check (no install required):
 
 ```bash
 python3 -m py_compile \
-  ollama_utils_update.py \
-  ollama_utils_test.py \
-  ollama_utils_gui.py \
-  src/ollama_utils/*.py
+  tz_ollama_utils_update.py \
+  tz_ollama_utils_test.py \
+  tz_ollama_utils_gui.py \
+  src/tz_ollama_utils/*.py
 ```
 
 ## Building Standalone Binaries
@@ -237,7 +237,7 @@ Local build:
 
 ```bash
 python3 -m pip install .[build]
-python3 -m PyInstaller --noconfirm --clean --onefile --windowed --name ollama-utils ollama_utils_gui.py
+python3 -m PyInstaller --noconfirm --clean --onefile --windowed --name tz-ollama-utils tz_ollama_utils_gui.py
 ```
 
 The generated binary appears under `dist/`.

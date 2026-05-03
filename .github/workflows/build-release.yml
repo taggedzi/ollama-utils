@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: ollama-utils-linux
-            binary_name: ollama-utils
+            artifact_name: tz-ollama-utils-linux
+            binary_name: tz-ollama-utils
           - os: windows-latest
-            artifact_name: ollama-utils-windows
-            binary_name: ollama-utils.exe
+            artifact_name: tz-ollama-utils-windows
+            binary_name: tz-ollama-utils.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -52,8 +52,8 @@ jobs:
           --clean
           --onefile
           --windowed
-          --name ollama-utils
-          ollama_utils_gui.py
+          --name tz-ollama-utils
+          tz_ollama_utils_gui.py
 
       - name: Package release asset
         shell: bash

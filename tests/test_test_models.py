@@ -1,6 +1,6 @@
 import pytest
 
-from ollama_utils.test_models import (
+from tz_ollama_utils.test_models import (
     classify_failure,
     model_supports_embeddings,
     normalize_ollama_api_base_url,

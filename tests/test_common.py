@@ -1,6 +1,6 @@
 import pytest
 
-from ollama_utils.common import (
+from tz_ollama_utils.common import (
     clean_text,
     format_bytes,
     truncate_text,
@@ -190,11 +190,11 @@ def test_yaml_dump_lines_indent():
 # --- StopRequested ---
 
 def test_stop_requested_is_exception():
-    from ollama_utils.common import StopRequested
+    from tz_ollama_utils.common import StopRequested
     assert issubclass(StopRequested, Exception)
 
 
 def test_stop_requested_can_be_raised_and_caught():
-    from ollama_utils.common import StopRequested
+    from tz_ollama_utils.common import StopRequested
     with pytest.raises(StopRequested):
         raise StopRequested
