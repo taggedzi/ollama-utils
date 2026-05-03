@@ -1,3 +1,8 @@
-__all__ = ["__version__"]
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = "0.3.1"
+try:
+    __version__ = version("ollama-utils")
+except PackageNotFoundError:
+    __version__ = "dev"
+
+__all__ = ["__version__"]
