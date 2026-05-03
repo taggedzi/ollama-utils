@@ -50,7 +50,7 @@ jobs:
 
       - name: Build GUI binary
         run: >
-          pyinstaller
+          python -m PyInstaller
           --noconfirm
           --clean
           --onefile

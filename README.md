@@ -120,8 +120,9 @@ Default behavior:
 - checks whether the Ollama API server is reachable before testing and warns clearly when it is not running
 - skips models whose stored size exceeds startup device VRAM when VRAM detection is available
 - fetches concise metadata from the Ollama API
-- smoke-tests runnable models with `ollama run`
-- retries embedding-style models with sample input when needed
+- smoke-tests completion-capable models with the Ollama HTTP API `/api/generate`
+- tests embedding-capable models with the Ollama HTTP API `/api/embed`
+- falls back to the local `ollama` CLI test path only when the Ollama API is unavailable
 - writes a YAML report to `ollama_model_failures.yaml`
 
 Useful CLI options:
@@ -162,7 +163,7 @@ GUI notes:
 
 - the Ollama API base URL field is session-scoped and resets to the default on application restart
 - the update tab uses the local `ollama` CLI
-- the test tab prefers the configured Ollama HTTP API base URL for inventory details and metadata, but falls back to `ollama list` when the API inventory is unavailable or returns fewer models than the CLI
+- the test tab prefers the configured Ollama HTTP API base URL for inventory, metadata, and smoke tests, but falls back to local CLI behavior when API calls are unavailable and still compares inventory against `ollama list` for completeness
 - the test tab warns at startup when the configured Ollama API server is not reachable, which usually means the Ollama app or server needs to be started manually
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 
@@ -197,7 +198,7 @@ The report also records the effective API base URL, timeout, VRAM policy, and se
 
 ## Notes and Limitations
 
-- `ollama_utils_test.py` depends on both the local Ollama HTTP API and the `ollama` CLI.
+- `ollama_utils_test.py` prefers the Ollama HTTP API for inventory, metadata, and model execution. It still uses the local `ollama` CLI for inventory comparison and as a fallback execution path when the API is unavailable.
 - `ollama_utils_update.py` uses the local `ollama` CLI and does not currently support a custom remote API target.
 - `nvidia-smi` is optional. When present, VRAM filtering currently uses the largest `memory.total` value returned by `nvidia-smi`.
 - If `nvidia-smi` is unavailable, the script continues without size filtering and records that as a warning.
@@ -236,7 +237,7 @@ Local build:
 
 ```bash
 python3 -m pip install .[build]
-pyinstaller --noconfirm --clean --onefile --windowed --name ollama-utils ollama_utils_gui.py
+python3 -m PyInstaller --noconfirm --clean --onefile --windowed --name ollama-utils ollama_utils_gui.py
 ```
 
 The generated binary appears under `dist/`.
@@ -251,6 +252,7 @@ GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/work
 - uploads each build as a workflow artifact
 - attaches packaged release assets automatically when you push a tag like `v0.2.0`
 - verifies that `tkinter` is available in the build environment before packaging
+- invokes PyInstaller through `python -m PyInstaller` so the build does not depend on a shell-resolved wrapper script
 
 Recommended release flow:
 
