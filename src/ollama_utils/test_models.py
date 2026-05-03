@@ -19,7 +19,7 @@ from .common import truncate_with_metadata
 from .common import yaml_dump_lines
 
 DEFAULT_TIMEOUT_SECONDS = 300
-FAILURE_LOG = Path("ollama_model_failures.yaml")
+DEFAULT_REPORT_PATH = Path("ollama_model_failures.yaml")
 SMOKE_TEST_PROMPT = "Respond with exactly OK."
 EMBEDDING_SAMPLE_TEXT = "test"
 API_TIMEOUT_SECONDS = 30
@@ -151,8 +151,8 @@ def parse_args(argv):
     parser.add_argument(
         "--report-path",
         type=Path,
-        default=FAILURE_LOG,
-        help=f"Write the YAML report to this path. Default: {FAILURE_LOG}.",
+        default=DEFAULT_REPORT_PATH,
+        help=f"Write the YAML report to this path. Default: {DEFAULT_REPORT_PATH}.",
     )
     parser.add_argument(
         "--api-base-url",

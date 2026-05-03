@@ -5,7 +5,7 @@ from pathlib import Path
 
 from . import __version__
 from .common import detect_ollama_version
-from .test_models import FAILURE_LOG
+from .test_models import DEFAULT_REPORT_PATH
 from .test_models import OLLAMA_API_BASE_URL
 from .test_models import normalize_ollama_api_base_url
 from .test_models import main as test_main
@@ -39,8 +39,8 @@ class OllamaUtilsApp:
         self.vram_override_var = self.tk.StringVar(value="")
         self.api_base_url_var = self.tk.StringVar(value=OLLAMA_API_BASE_URL)
         self.status_var = self.tk.StringVar(value="Idle")
-        self.report_var = self.tk.StringVar(value=f"Report: {FAILURE_LOG.resolve()}")
-        self.report_path_var = self.tk.StringVar(value=str(FAILURE_LOG.resolve()))
+        self.report_var = self.tk.StringVar(value=f"Report: {DEFAULT_REPORT_PATH.resolve()}")
+        self.report_path_var = self.tk.StringVar(value=str(DEFAULT_REPORT_PATH.resolve()))
         self.active_job_var = self.tk.StringVar(value="No job running")
         self.version_var = self.tk.StringVar(
             value=f"App v{__version__} | Ollama version: detecting..."
