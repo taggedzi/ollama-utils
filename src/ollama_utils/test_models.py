@@ -8,6 +8,7 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from .common import clean_text
+from .common import default_emit
 from .common import format_bytes
 from .common import subprocess_window_kwargs
 from .common import timestamp_now
@@ -24,10 +25,6 @@ API_TIMEOUT_SECONDS = 30
 STOP_TIMEOUT_SECONDS = 30
 NVIDIA_SMI_TIMEOUT_SECONDS = 10
 OLLAMA_API_BASE_URL = "http://127.0.0.1:11434/api"
-
-
-def default_emit(message):
-    print(message, flush=True)
 
 
 def parse_parameters_text(parameters_text):

@@ -187,3 +187,7 @@ def resolve_tool_path(tool_name):
 
 def tool_command(tool_name, *args):
     return [resolve_tool_path(tool_name), *args]
+
+
+def default_emit(message):
+    print(message, flush=True)

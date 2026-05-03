@@ -4,12 +4,9 @@ import time
 from datetime import datetime
 
 from .common import clean_text
+from .common import default_emit
 from .common import subprocess_window_kwargs
 from .common import tool_command
-
-
-def default_emit(message):
-    print(message, flush=True)
 
 
 def log(message, emit):
