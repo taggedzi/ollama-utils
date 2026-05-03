@@ -24,6 +24,8 @@ class OllamaUtilsApp:
     def __init__(self, root, tk_module, ttk_module):
         self.tk = tk_module
         self.ttk = ttk_module
+        import tkinter.filedialog as _fd
+        self.filedialog = _fd
         self.root = root
         self.root.title("ollama-utils")
         self.root.geometry("1040x780")
@@ -517,9 +519,7 @@ class OllamaUtilsApp:
         )
 
     def choose_report_path(self):
-        from tkinter import filedialog
-
-        path = filedialog.asksaveasfilename(
+        path = self.filedialog.asksaveasfilename(
             title="Choose YAML report path",
             defaultextension=".yaml",
             initialfile=Path(self.report_path_var.get()).name,
@@ -591,8 +591,7 @@ def main():
         return 1
 
     root = tk.Tk()
-    app = OllamaUtilsApp(root, tk, ttk)
-    del app
+    OllamaUtilsApp(root, tk, ttk)
     root.mainloop()
     return 0
 
