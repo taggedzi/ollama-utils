@@ -390,8 +390,8 @@ class OllamaUtilsApp:
         # --- Split pane ---
         split = self.ttk.Frame(parent, style="App.TFrame")
         split.grid(row=1, column=0, sticky="nsew", padx=(0, 0))
-        split.columnconfigure(0, weight=2)
-        split.columnconfigure(1, weight=3)
+        split.columnconfigure(0, weight=1)
+        split.columnconfigure(1, weight=2, minsize=300)
         split.rowconfigure(0, weight=1)
         self._build_search_list(split)
         self._build_search_detail(split)
@@ -583,6 +583,13 @@ class OllamaUtilsApp:
             if cb:
                 cb["values"] = ["Any"] + values
 
+    def _bind_detail_scroll(self, widget):
+        widget.bind("<MouseWheel>", lambda e: self._detail_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+        widget.bind("<Button-4>", lambda e: self._detail_canvas.yview_scroll(-1, "units"))
+        widget.bind("<Button-5>", lambda e: self._detail_canvas.yview_scroll(1, "units"))
+        for child in widget.winfo_children():
+            self._bind_detail_scroll(child)
+
     def _populate_detail_panel(self, model: dict):
         self._detail_placeholder.grid_remove()
         self._detail_canvas.grid()
@@ -614,7 +621,7 @@ class OllamaUtilsApp:
             lbl.pack(side="left", padx=(0, 4))
 
         btns = self.ttk.Frame(header, style="Card.TFrame")
-        btns.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 0))
+        btns.grid(row=2, column=0, pady=(8, 0), sticky="w")
 
         model_name = model["name"]
         self._search_copy_btn = self.ttk.Button(
@@ -736,6 +743,8 @@ class OllamaUtilsApp:
             short = (digest[:40] + "…") if len(digest) > 40 else digest
             self.ttk.Label(d, text=short, style="FieldVal.TLabel",
                            font=("Consolas", 8)).grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        self._bind_detail_scroll(self._search_detail_frame)
 
     def _clear_detail_panel(self):
         self._search_selected_model = None
