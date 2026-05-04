@@ -384,10 +384,124 @@ class OllamaUtilsApp:
         self._load_search_models()
 
     def _on_search_filter_change(self):
-        pass  # implemented in Task 7
+        if not self._search_tree:
+            return
+        filters = self._build_search_filters()
+        filtered = filter_models(self._search_all_models, filters)
+        self._repopulate_tree(filtered)
+        if self._search_count_var:
+            self._search_count_var.set(f"Showing {len(filtered)} of {len(self._search_all_models)}")
+
+    def _build_search_filters(self) -> dict:
+        filters = {}
+        for key, var in self._search_filter_vars.items():
+            if isinstance(var, self.tk.BooleanVar):
+                if var.get():
+                    filters[key] = True
+            else:
+                val = var.get().strip()
+                if val and val != "Any":
+                    filters[key] = val
+
+        caps = {cap for cap, var in self._search_cap_vars.items() if var.get()}
+        if caps:
+            filters["capabilities"] = caps
+
+        size_str = filters.pop("max_size_bytes", "")
+        if size_str:
+            size_map = {"2 GiB": 2, "4 GiB": 4, "8 GiB": 8, "16 GiB": 16, "32 GiB": 32}
+            gib = size_map.get(size_str)
+            if gib:
+                filters["max_size_bytes"] = gib * (1024 ** 3)
+
+        ctx_str = filters.pop("min_context", "")
+        if ctx_str:
+            ctx_map = {"2k": 2048, "4k": 4096, "8k": 8192, "32k": 32768, "128k": 131072}
+            filters["min_context"] = ctx_map.get(ctx_str, 0)
+
+        return filters
+
+    def _repopulate_tree(self, models: list):
+        tree = self._search_tree
+        if tree is None:
+            return
+        tree.delete(*tree.get_children())
+        cap_abbr = {"completion": "C", "tools": "T", "embedding": "E", "thinking": "Th", "vision": "V"}
+        for model in models:
+            caps = ",".join(cap_abbr.get(c, c[:2]) for c in (model.get("capabilities") or []))
+            tree.insert("", "end", iid=model["name"], values=(
+                model["name"],
+                model.get("family") or "",
+                model.get("parameter_size") or "",
+                model.get("quantization_level") or "",
+                model.get("size_human") or "",
+                caps,
+            ))
+
+    def _on_model_select(self, event):
+        if not self._search_tree:
+            return
+        selection = self._search_tree.selection()
+        if not selection:
+            return
+        name = selection[0]
+        model = next((m for m in self._search_all_models if m["name"] == name), None)
+        if model:
+            self._search_selected_model = model
+            self._populate_detail_panel(model)
 
     def _build_search_list(self, parent):
-        pass  # implemented in Task 7
+        list_frame = self.ttk.Frame(parent, style="Card.TFrame", padding=0)
+        list_frame.grid(row=0, column=0, padx=(0, 1), sticky="nsew")
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
+
+        columns = ("name", "family", "params", "quant", "size", "caps")
+        tree = self.ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse")
+        self._search_tree = tree
+
+        tree.heading("name", text="Name")
+        tree.heading("family", text="Family")
+        tree.heading("params", text="Params")
+        tree.heading("quant", text="Quant")
+        tree.heading("size", text="Size")
+        tree.heading("caps", text="Caps")
+
+        tree.column("name", width=180, minwidth=120, stretch=True)
+        tree.column("family", width=80, minwidth=60, stretch=False)
+        tree.column("params", width=60, minwidth=50, stretch=False)
+        tree.column("quant", width=80, minwidth=60, stretch=False)
+        tree.column("size", width=70, minwidth=60, stretch=False)
+        tree.column("caps", width=80, minwidth=60, stretch=False)
+
+        vsb = self.ttk.Scrollbar(list_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+
+        tree.bind("<<TreeviewSelect>>", self._on_model_select)
+
+    def _update_search_dropdowns(self):
+        models = self._search_all_models
+
+        def unique_sorted(key):
+            return sorted({m.get(key) for m in models if m.get(key)})
+
+        for key, values in [
+            ("family", unique_sorted("family")),
+            ("parameter_size", unique_sorted("parameter_size")),
+            ("quantization_level", unique_sorted("quantization_level")),
+            ("license_short", unique_sorted("license_short")),
+        ]:
+            cb = self._search_comboboxes.get(key)
+            if cb:
+                cb["values"] = ["Any"] + values
+
+    def _populate_detail_panel(self, model: dict):
+        pass  # implemented in Task 8
+
+    def _clear_detail_panel(self):
+        pass  # implemented in Task 8
 
     def _build_search_detail(self, parent):
         pass  # implemented in Task 8
