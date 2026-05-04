@@ -111,6 +111,7 @@ class OllamaUtilsApp:
         self._search_params_visible = False
         self._search_params_text = None
         self._search_params_toggle_btn = None
+        self._search_loading = False
         self._detail_canvas = None
         self._detail_vsb = None
         self._detail_placeholder = None
@@ -260,6 +261,7 @@ class OllamaUtilsApp:
         update_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=18)
         test_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=18)
         search_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=0)
+        self._search_tab = search_tab
 
         notebook.add(update_tab, text="Update")
         notebook.add(test_tab, text="Test & Report")
@@ -379,9 +381,6 @@ class OllamaUtilsApp:
         self._build_search_detail(split)
 
     def _on_combobox_select(self, key):
-        var = self._search_filter_vars.get(key)
-        if var and var.get() == "Any":
-            var.set("")
         self._on_search_filter_change()
 
     def _clear_search_filters(self):
@@ -447,14 +446,17 @@ class OllamaUtilsApp:
         cap_abbr = {"completion": "C", "tools": "T", "embedding": "E", "thinking": "Th", "vision": "V"}
         for model in models:
             caps = ",".join(cap_abbr.get(c, c[:2]) for c in (model.get("capabilities") or []))
-            tree.insert("", "end", iid=model["name"], values=(
-                model["name"],
-                model.get("family") or "",
-                model.get("parameter_size") or "",
-                model.get("quantization_level") or "",
-                model.get("size_human") or "",
-                caps,
-            ))
+            try:
+                tree.insert("", "end", iid=model["name"], values=(
+                    model["name"],
+                    model.get("family") or "",
+                    model.get("parameter_size") or "",
+                    model.get("quantization_level") or "",
+                    model.get("size_human") or "",
+                    caps,
+                ))
+            except Exception:
+                pass
 
     def _on_model_select(self, event):
         if not self._search_tree:
@@ -711,13 +713,24 @@ class OllamaUtilsApp:
         self._detail_canvas = canvas
         self._detail_vsb = vsb
 
+        def _on_detail_scroll(event):
+            self._detail_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind("<MouseWheel>", _on_detail_scroll)
+        canvas.bind("<Button-4>", lambda e: self._detail_canvas.yview_scroll(-1, "units"))
+        canvas.bind("<Button-5>", lambda e: self._detail_canvas.yview_scroll(1, "units"))
+
     def _on_tab_changed(self, event):
         notebook = event.widget
-        if notebook.index(notebook.select()) == 2:
+        if notebook.select() == str(self._search_tab):
             self._load_search_models()
 
     def _load_search_models(self):
+        if getattr(self, '_search_loading', False):
+            return
+        self._search_loading = True
         if self._search_tree is None:
+            self._search_loading = False
             return
 
         # Show cached data immediately if available
@@ -725,7 +738,7 @@ class OllamaUtilsApp:
         cached = self._search_cache.get_models()
         if cached:
             self._search_all_models = cached
-            self._repopulate_tree(cached)
+            self._repopulate_tree(filter_models(cached, self._build_search_filters()))
             self._update_search_dropdowns()
             if self._search_count_var:
                 self._search_count_var.set(f"Showing {len(cached)} of {len(cached)}")
@@ -748,6 +761,7 @@ class OllamaUtilsApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_search_load_complete(self, models: list, updated_count: int):
+        self._search_loading = False
         self._search_all_models = models
         self._repopulate_tree(filter_models(models, self._build_search_filters()))
         self._update_search_dropdowns()
@@ -812,6 +826,8 @@ class OllamaUtilsApp:
         if self._search_update_btn:
             self._search_update_btn.configure(state="disabled")
 
+        api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
+
         def worker():
             import subprocess as _sp
             try:
@@ -828,7 +844,6 @@ class OllamaUtilsApp:
                 proc.wait()
                 if proc.returncode == 0:
                     self.log_queue.put({"kind": "log", "message": f"Pull complete for {name}."})
-                    api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
                     self._search_cache.refresh(api_url)
                     updated = self._search_cache.get_models()
                     self.root.after(0, lambda: self._after_search_update(name, updated))

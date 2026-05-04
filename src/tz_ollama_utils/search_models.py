@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from urllib import request as urllib_request
@@ -28,9 +29,11 @@ class ModelSearchCache:
     def save(self, cache_path: Path | None = None) -> None:
         path = cache_path if cache_path is not None else self.DEFAULT_CACHE_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
         data = {"api_base_url": self._api_base_url, "models": self._models}
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        os.replace(tmp, path)
 
     def get_models(self) -> list:
         return [self._normalize(name, entry) for name, entry in self._models.items()]
