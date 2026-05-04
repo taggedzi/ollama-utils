@@ -263,6 +263,11 @@ def test_normalize_capabilities_empty_when_missing():
     assert m["capabilities"] == []
 
 
+def test_normalize_capabilities_falls_back_to_details():
+    m = _cache_with({}, {"details": {"capabilities": ["embedding"]}})
+    assert m["capabilities"] == ["embedding"]
+
+
 def test_normalize_context_window_from_modelinfo():
     m = _cache_with({}, {"model_info": {"llama.context_length": 131072}})
     assert m["context_window"] == 131072
