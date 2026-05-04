@@ -5,7 +5,9 @@ dist/
 __pycache__/
 *.pyc
 ollama_model_failures.yaml
+model_report.yaml
 *.egg-info
 docs/superpowers/
 settings.local.json
 .worktrees/
+.superpowers/

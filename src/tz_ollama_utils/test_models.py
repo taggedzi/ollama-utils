@@ -827,7 +827,7 @@ def log_model_record(index, total_models, model_record, emit):
         emit(line)
 
 
-def main(argv=None, emit=None, stop_requested=None):
+def main(argv=None, emit=None, stop_requested=None, progress=None):
     argv = argv or sys.argv
     emit = emit or default_emit
 
@@ -910,6 +910,9 @@ def main(argv=None, emit=None, stop_requested=None):
         for index, model_summary in enumerate(models, start=1):
             if stop_requested and stop_requested():
                 raise KeyboardInterrupt
+
+            if progress:
+                progress(index - 1, len(models))
 
             model = clean_text(model_summary.get("name"))
             emit(f"[{index}/{len(models)}] Inspecting {model} ...")

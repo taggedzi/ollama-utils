@@ -23,6 +23,7 @@ TEXT_MUTED = "#5B5147"
 LOG_BG = "#16181C"
 LOG_FG = "#F5EBDD"
 REPO_URL = "https://github.com/taggedzi/tz-ollama-utils"
+_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
 def _asset_roots():
@@ -89,12 +90,11 @@ class OllamaUtilsApp:
         self.vram_override_var = self.tk.StringVar(value="")
         self.api_base_url_var = self.tk.StringVar(value=OLLAMA_API_BASE_URL)
         self.status_var = self.tk.StringVar(value="Idle")
-        self.report_var = self.tk.StringVar(value=f"Report: {DEFAULT_REPORT_PATH.resolve()}")
         self.report_path_var = self.tk.StringVar(value=str(DEFAULT_REPORT_PATH.resolve()))
         self.active_job_var = self.tk.StringVar(value="No job running")
-        self.version_var = self.tk.StringVar(
-            value=f"App v{__version__} | Ollama version: detecting..."
-        )
+        self._liveness_var = self.tk.StringVar(value=" ")
+        self._liveness_frame = 0
+        self._ollama_version = None
         self.about_window = None
         self._search_cache = ModelSearchCache()
         self._search_all_models: list = []
@@ -191,6 +191,13 @@ class OllamaUtilsApp:
             foreground=TEXT_DARK,
             font=("Segoe UI", 9),
         )
+        style.configure(
+            "Activity.Horizontal.TProgressbar",
+            troughcolor=PANEL_BG,
+            background=ACCENT,
+            borderwidth=0,
+            thickness=6,
+        )
         style.configure("App.TNotebook", background=APP_BG, borderwidth=0)
         style.configure(
             "App.TNotebook.Tab",
@@ -222,7 +229,6 @@ class OllamaUtilsApp:
         self._build_header()
         self._build_tabs()
         self._build_activity_area()
-        self._build_footer()
 
     def _build_header(self):
         header = self.ttk.Frame(self.root, style="Header.TFrame", padding=(22, 18))
@@ -249,6 +255,13 @@ class OllamaUtilsApp:
             ),
             style="Subtitle.TLabel",
         ).grid(row=1, column=1, pady=(6, 0), sticky="w")
+
+        self.ttk.Button(
+            header,
+            text="About",
+            command=self.open_about_modal,
+            style="Quiet.TButton",
+        ).grid(row=0, column=2, sticky="ne")
 
     def _build_tabs(self):
         shell = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 16, 18, 10))
@@ -1063,32 +1076,10 @@ class OllamaUtilsApp:
         activity = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 0, 18, 10))
         activity.grid(row=2, column=0, sticky="nsew")
         activity.columnconfigure(0, weight=1)
-        activity.rowconfigure(1, weight=1)
-
-        status_card = self._make_card(activity, padding=(16, 14))
-        status_card.grid(row=0, column=0, pady=(0, 10), sticky="ew")
-        status_card.columnconfigure(0, weight=1)
-        status_card.columnconfigure(1, weight=0)
-
-        self.ttk.Label(status_card, text="Activity", style="SectionTitle.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        self.ttk.Label(status_card, textvariable=self.status_var, style="SectionTitle.TLabel").grid(
-            row=0, column=1, sticky="e"
-        )
-        self.ttk.Label(status_card, textvariable=self.active_job_var, style="Body.TLabel").grid(
-            row=1, column=0, pady=(6, 0), sticky="w"
-        )
-        self.clear_button = self.ttk.Button(
-            status_card,
-            text="Clear Log",
-            command=self.clear_log,
-            style="Quiet.TButton",
-        )
-        self.clear_button.grid(row=1, column=1, pady=(6, 0), sticky="e")
+        activity.rowconfigure(0, weight=1)
 
         log_card = self._make_card(activity, padding=(0, 0))
-        log_card.grid(row=1, column=0, sticky="nsew")
+        log_card.grid(row=0, column=0, sticky="nsew")
         log_card.columnconfigure(0, weight=1)
         log_card.rowconfigure(0, weight=1)
 
@@ -1110,29 +1101,29 @@ class OllamaUtilsApp:
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.log_text.configure(yscrollcommand=scrollbar.set)
 
-    def _build_footer(self):
-        footer = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 0, 18, 18))
-        footer.grid(row=3, column=0, sticky="ew")
-        footer.columnconfigure(0, weight=1)
-        footer.columnconfigure(1, weight=0)
-
-        self.ttk.Label(footer, textvariable=self.version_var, style="Meta.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        self.ttk.Button(
-            footer,
-            text="About",
-            command=self.open_about_modal,
+        self.clear_button = self.ttk.Button(
+            self.log_text,
+            text="Clear Log",
+            command=self.clear_log,
             style="Quiet.TButton",
-        ).grid(row=0, column=1, sticky="e")
-        self.ttk.Label(footer, textvariable=self.report_var, style="Meta.TLabel").grid(
-            row=1, column=0, pady=(4, 0), sticky="w"
         )
-        self.ttk.Label(
+        self.clear_button.place(relx=1.0, rely=0.0, anchor="ne", x=-4, y=4)
+
+        footer = self.ttk.Frame(activity, style="App.TFrame", padding=(4, 6, 4, 0))
+        footer.grid(row=1, column=0, sticky="ew")
+
+        self.ttk.Label(footer, text="Activity: ", style="Meta.TLabel").grid(row=0, column=0, sticky="w")
+        self.ttk.Label(footer, textvariable=self.status_var, style="Meta.TLabel").grid(row=0, column=1, sticky="w")
+        self.ttk.Separator(footer, orient="vertical").grid(row=0, column=2, sticky="ns", padx=(16, 16))
+        self.ttk.Label(footer, textvariable=self._liveness_var, style="Meta.TLabel", width=2).grid(row=0, column=3, sticky="w")
+        self.progress_bar = self.ttk.Progressbar(
             footer,
-            text="Requires local Ollama CLI/API. Generated binaries do not bundle Ollama itself.",
-            style="Meta.TLabel",
-        ).grid(row=2, column=0, pady=(4, 0), sticky="w")
+            style="Activity.Horizontal.TProgressbar",
+            mode="determinate",
+            maximum=100,
+        )
+        self.progress_bar.grid(row=0, column=4, sticky="ew", padx=(4, 0))
+        footer.columnconfigure(4, weight=1)
 
     def _make_card(self, parent, padding=18):
         return self.ttk.Frame(parent, style="Card.TFrame", padding=padding)
@@ -1198,22 +1189,30 @@ class OllamaUtilsApp:
             container,
             text=f"Version {__version__}",
             style="Body.TLabel",
-        ).grid(row=1, column=0, pady=(6, 14), sticky="w")
+        ).grid(row=1, column=0, pady=(6, 6), sticky="w")
+
+        if self._ollama_version is None:
+            ollama_label_text = "Ollama: Detecting..."
+        elif self._ollama_version:
+            ollama_label_text = self._ollama_version
+        else:
+            ollama_label_text = (
+                "Requires a local or reachable Ollama CLI/API. "
+                "This utility does not bundle Ollama itself."
+            )
+        self.ttk.Label(
+            container,
+            text=ollama_label_text,
+            style="Body.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=2, column=0, pady=(0, 14), sticky="w")
+
         self.ttk.Label(
             container,
             text=(
                 "Desktop tools for updating installed Ollama models, running inventory "
                 "checks, and saving YAML reports from one interface."
-            ),
-            style="Body.TLabel",
-            wraplength=420,
-            justify="left",
-        ).grid(row=2, column=0, pady=(0, 10), sticky="w")
-        self.ttk.Label(
-            container,
-            text=(
-                "Requires a local or reachable Ollama CLI/API. "
-                "This utility does not bundle Ollama itself."
             ),
             style="Body.TLabel",
             wraplength=420,
@@ -1258,12 +1257,7 @@ class OllamaUtilsApp:
 
     def _load_versions(self):
         def worker():
-            ollama_version = detect_ollama_version()
-            if ollama_version:
-                message = f"App v{__version__} | {ollama_version}"
-            else:
-                message = f"App v{__version__} | Ollama version: unavailable"
-            self.root.after(0, lambda: self.version_var.set(message))
+            self._ollama_version = detect_ollama_version() or ""
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1284,6 +1278,8 @@ class OllamaUtilsApp:
         self.test_button.configure(state=action_state)
         self.stop_button.configure(state=stop_state)
         self.test_stop_button.configure(state=stop_state)
+        if not running:
+            self._liveness_var.set(" ")
 
     def _drain_log_queue(self):
         while True:
@@ -1294,11 +1290,20 @@ class OllamaUtilsApp:
 
             if item["kind"] == "log":
                 self.append_log(item["message"])
+            elif item["kind"] == "progress":
+                total = item["total"]
+                if total > 0:
+                    self.progress_bar["value"] = item["current"] / total * 100
             elif item["kind"] == "done":
-                self.report_var.set(f"Report: {Path(self.report_path_var.get()).resolve()}")
+                if item.get("code") != 130:
+                    self.progress_bar["value"] = 100
                 self._set_running(False, item["status"])
                 self.active_job_var.set("No job running")
                 self.stop_event.clear()
+
+        if self.worker and self.worker.is_alive():
+            self._liveness_frame = (self._liveness_frame + 1) % len(_SPINNER_FRAMES)
+            self._liveness_var.set(_SPINNER_FRAMES[self._liveness_frame])
 
         self.root.after(100, self._drain_log_queue)
 
@@ -1309,15 +1314,19 @@ class OllamaUtilsApp:
         self.stop_event.clear()
         self._set_running(True, f"Running {label}...")
         self.active_job_var.set(f"{label} job in progress")
+        self.progress_bar["value"] = 0
         self.append_log(f"=== {label} ===")
 
         def emit(message):
             self.log_queue.put({"kind": "log", "message": message})
 
+        def report_progress(current, total):
+            self.log_queue.put({"kind": "progress", "current": current, "total": total})
+
         def runner():
-            code = target(emit, lambda: self.stop_event.is_set())
+            code = target(emit, lambda: self.stop_event.is_set(), report_progress)
             status = f"{label} finished with exit code {code}"
-            self.log_queue.put({"kind": "done", "status": status})
+            self.log_queue.put({"kind": "done", "status": status, "code": code})
 
         self.worker = threading.Thread(target=runner, daemon=True)
         self.worker.start()
@@ -1368,10 +1377,11 @@ class OllamaUtilsApp:
     def run_update(self):
         self._run_worker(
             "Update",
-            lambda emit, stop_requested: update_main(
+            lambda emit, stop_requested, progress: update_main(
                 ["tz-ollama-utils-update"],
                 emit,
                 stop_requested=stop_requested,
+                progress=progress,
             ),
         )
 
@@ -1427,10 +1437,11 @@ class OllamaUtilsApp:
 
         self._run_worker(
             "Test",
-            lambda emit, stop_requested: test_main(
+            lambda emit, stop_requested, progress: test_main(
                 argv,
                 emit,
                 stop_requested=stop_requested,
+                progress=progress,
             ),
         )
 

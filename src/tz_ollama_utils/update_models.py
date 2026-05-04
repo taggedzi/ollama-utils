@@ -81,7 +81,7 @@ def pull_model(model, index, total, emit, stop_requested=None):
     return process.wait()
 
 
-def main(argv=None, emit=None, stop_requested=None):
+def main(argv=None, emit=None, stop_requested=None, progress=None):
     emit = emit or default_emit
 
     try:
@@ -101,6 +101,9 @@ def main(argv=None, emit=None, stop_requested=None):
         for index, model in enumerate(models, start=1):
             if stop_requested and stop_requested():
                 raise StopRequested
+
+            if progress:
+                progress(index - 1, len(models))
 
             try:
                 returncode = pull_model(
