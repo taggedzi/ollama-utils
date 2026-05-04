@@ -1030,7 +1030,7 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
         emit(f"Skipped models: {len(skips)}")
     if warnings:
         emit(f"Warnings: {len(warnings)}")
-    emit(f"Failure report: {report_path}")
+    emit(f"Model report: {report_path}")
 
     return summarize_exit_code(failures, aborted)
 
