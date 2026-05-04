@@ -54,6 +54,7 @@ def test_save_writes_json(tmp_path):
     p = tmp_path / "cache.json"
     cache.save(p)
     data = json.loads(p.read_text())
+    assert data["schema_version"] == 2
     assert data["api_base_url"] == "http://localhost:11434/api"
     assert "test:latest" in data["models"]
 
@@ -100,9 +101,16 @@ def test_update_model_show_persists(tmp_path):
         "m:latest": {"digest": "d", "cached_at": "", "tags": {}, "show": {}},
     }
     p = tmp_path / "cache.json"
-    cache.update_model_show("m:latest", {"license": "MIT"}, cache_path=p)
+    cache.update_model_show(
+        "m:latest",
+        {"license": "MIT", "system": "You are helpful.", "parameters": "num_ctx 4096"},
+        cache_path=p,
+    )
     data = json.loads(p.read_text())
-    assert data["models"]["m:latest"]["show"]["license"] == "MIT"
+    assert data["models"]["m:latest"]["show"]["license_short"] == "MIT"
+    assert "license" not in data["models"]["m:latest"]["show"]
+    assert "system" not in data["models"]["m:latest"]["show"]
+    assert "parameters" not in data["models"]["m:latest"]["show"]
 
 
 def _mock_response(data: dict):
@@ -333,6 +341,12 @@ def test_normalize_system_prompt_none_when_missing():
     assert m["system_prompt"] is None
 
 
+def test_normalize_has_system_prompt_from_sanitized_cache():
+    m = _cache_with({}, {"has_system_prompt": True})
+    assert m["has_system_prompt"] is True
+    assert m["system_prompt"] is None
+
+
 def test_normalize_parent_model():
     m = _cache_with({}, {"details": {"parent_model": "llama3.2"}})
     assert m["parent_model"] == "llama3.2"
@@ -458,3 +472,30 @@ def test_fetch_show_uses_model_field_in_body(tmp_path):
     assert len(captured_bodies) == 1
     assert captured_bodies[0] == {"model": "llama3.2:3b"}
     assert "name" not in captured_bodies[0]
+
+
+def test_save_persists_sensitive_model_text_only_when_opted_in(tmp_path):
+    cache = ModelSearchCache(persist_sensitive_text=True)
+    cache._models = {
+        "m:latest": {
+            "digest": "d",
+            "cached_at": "",
+            "tags": {},
+            "show": {
+                "license": "MIT",
+                "system": "You are helpful.",
+                "template": "{{ .Prompt }}",
+                "modelfile": "FROM llama3.2",
+                "parameters": "num_ctx 4096",
+            },
+        },
+    }
+    p = tmp_path / "cache.json"
+    cache.save(p)
+    data = json.loads(p.read_text())
+    show = data["models"]["m:latest"]["show"]
+    assert show["license"] == "MIT"
+    assert show["system"] == "You are helpful."
+    assert show["template"] == "{{ .Prompt }}"
+    assert show["modelfile"] == "FROM llama3.2"
+    assert show["parameters"] == "num_ctx 4096"

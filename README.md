@@ -177,6 +177,7 @@ GUI notes:
 - the test tab prefers the configured Ollama HTTP API base URL for inventory, metadata, and smoke tests, but falls back to local CLI behavior when API calls are unavailable and still compares inventory against `ollama list` for completeness
 - the test tab warns at startup when the configured Ollama API server is not reachable, which usually means the Ollama app or server needs to be started manually
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
+- the Search & Discover disk cache retains a minimized model summary by default; set `TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT=1` only if you explicitly want long text fields like prompts, templates, modelfiles, parameters, and full license text written to `~/.tz_ollama_utils/model_cache.json`
 
 ## YAML Report
 
@@ -205,7 +206,16 @@ Useful fields in the overview include:
 - context window when available
 - device-VRAM fit status
 
-The report also records the effective API base URL, timeout, VRAM policy, and selected output path for the run.
+The report records the effective timeout, VRAM policy, summary counts, and a redacted export-safe reference to the output file. Remote API hosts are redacted in the YAML output, while loopback API URLs are preserved.
+
+By default, the report does not retain preview text for license, system prompt, template, modelfile, or parameters fields. Use `--include-metadata-previews` only when you intentionally want those previews in the YAML output.
+
+## Data Retention
+
+- `~/.tz_ollama_utils/model_cache.json` stores model names, digest, size, timestamps, family/format/quantization metadata, capabilities, parent model, context window, and license first-line summary by default.
+- The cache does not persist system prompts, templates, modelfiles, parameters text, or full license text unless `TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT=1` is set.
+- YAML reports include warnings, skips, failures, attempts, and model summaries, but exported strings are scrubbed to remove absolute paths and redact remote URLs.
+- Metadata previews for long text fields are omitted from reports unless `--include-metadata-previews` is passed.
 
 ## Notes and Limitations
 

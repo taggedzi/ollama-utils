@@ -6,6 +6,9 @@ from tz_ollama_utils.test_models import (
     normalize_ollama_api_base_url,
     parse_parameters_text,
     parse_args,
+    redact_export_text,
+    sanitize_api_base_url_for_export,
+    sanitize_model_metadata,
 )
 
 
@@ -53,6 +56,16 @@ def test_parse_args_accepts_secure_remote_with_allow_remote():
     assert args.api_base_url == "https://example.com:11434/api"
 
 
+def test_parse_args_metadata_previews_default_false():
+    args = parse_args(["tz-ollama-utils-test"])
+    assert args.include_metadata_previews is False
+
+
+def test_parse_args_metadata_previews_opt_in():
+    args = parse_args(["tz-ollama-utils-test", "--include-metadata-previews"])
+    assert args.include_metadata_previews is True
+
+
 # --- parse_parameters_text ---
 
 def test_parse_parameters_empty_string():
@@ -75,6 +88,51 @@ def test_parse_parameters_multiple_lines():
 def test_parse_parameters_value_with_spaces():
     result = parse_parameters_text('stop "</s>"')
     assert result == {"stop": '"</s>"'}
+
+
+def test_sanitize_model_metadata_excludes_previews_by_default():
+    result = sanitize_model_metadata(
+        {
+            "license": "MIT",
+            "system": "You are helpful.",
+            "template": "{{ .Prompt }}",
+            "modelfile": "FROM llama3.2",
+            "parameters": "num_ctx 4096",
+        }
+    )
+    assert result["license_available"] is True
+    assert result["license_preview"] is None
+    assert result["system_available"] is True
+    assert result["system_preview"] is None
+    assert result["parameters_available"] is True
+    assert result["parameters_preview"] is None
+    assert result["parameters_parsed"] == {"num_ctx": "4096"}
+
+
+def test_sanitize_model_metadata_includes_previews_when_opted_in():
+    result = sanitize_model_metadata(
+        {"system": "You are helpful.", "parameters": "num_ctx 4096"},
+        include_previews=True,
+    )
+    assert result["system_preview"]["preview"] == "You are helpful."
+    assert result["parameters_preview"]["preview"] == "num_ctx 4096"
+
+
+def test_redact_export_text_redacts_remote_urls_and_absolute_paths():
+    value = (
+        "See https://example.com:11434/api/show and "
+        "/home/alice/private/model_report.yaml and C:\\Users\\alice\\secret.txt"
+    )
+    result = redact_export_text(value)
+    assert "<redacted-remote-url>" in result
+    assert "/home/alice/private/model_report.yaml" not in result
+    assert "C:\\Users\\alice\\secret.txt" not in result
+    assert result.count("<redacted-path>") == 2
+
+
+def test_sanitize_api_base_url_preserves_loopback_and_redacts_remote_host():
+    assert sanitize_api_base_url_for_export("http://127.0.0.1:11434/api") == "http://127.0.0.1:11434/api"
+    assert sanitize_api_base_url_for_export("https://example.com:11434/api") == "https://<redacted-host>/api"
 
 
 # --- classify_failure ---

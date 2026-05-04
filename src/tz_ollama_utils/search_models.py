@@ -11,11 +11,29 @@ from .common import ResponseTooLargeError
 
 
 class ModelSearchCache:
+    CACHE_SCHEMA_VERSION = 2
     DEFAULT_CACHE_PATH = Path.home() / ".tz_ollama_utils" / "model_cache.json"
+    SENSITIVE_SHOW_FIELDS = ("license", "modelfile", "template", "system", "parameters")
+    PERSISTED_TAGS_FIELDS = ("name", "size", "modified_at", "digest", "details")
+    PERSISTED_DETAILS_FIELDS = (
+        "family",
+        "families",
+        "parameter_size",
+        "quantization_level",
+        "format",
+        "parent_model",
+        "capabilities",
+    )
 
-    def __init__(self):
+    def __init__(self, persist_sensitive_text: bool | None = None):
         self._models: dict = {}
         self._api_base_url: str = ""
+        if persist_sensitive_text is None:
+            persist_sensitive_text = (
+                os.environ.get("TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            )
+        self._persist_sensitive_text = persist_sensitive_text
 
     def load(self, cache_path: Path | None = None) -> bool:
         path = cache_path if cache_path is not None else self.DEFAULT_CACHE_PATH
@@ -23,7 +41,14 @@ class ModelSearchCache:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             self._api_base_url = data.get("api_base_url", "")
-            self._models = data.get("models", {})
+            raw_models = data.get("models", {})
+            if not isinstance(raw_models, dict):
+                raw_models = {}
+            self._models = {
+                name: self._load_cached_entry(entry)
+                for name, entry in raw_models.items()
+                if isinstance(entry, dict)
+            }
             return True
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             return False
@@ -32,7 +57,14 @@ class ModelSearchCache:
         path = cache_path if cache_path is not None else self.DEFAULT_CACHE_PATH
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        data = {"api_base_url": self._api_base_url, "models": self._models}
+        data = {
+            "schema_version": self.CACHE_SCHEMA_VERSION,
+            "api_base_url": self._api_base_url,
+            "models": {
+                name: self._persist_model_entry(entry)
+                for name, entry in self._models.items()
+            },
+        }
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(tmp, path)
@@ -129,25 +161,73 @@ class ModelSearchCache:
         ):
             return None
 
+    def _load_cached_entry(self, entry: dict) -> dict:
+        return {
+            "digest": entry.get("digest", ""),
+            "cached_at": entry.get("cached_at", ""),
+            "tags": self._persist_tags(entry.get("tags") or {}),
+            "show": self._persist_show(entry.get("show")),
+        }
+
+    def _persist_model_entry(self, entry: dict) -> dict:
+        return {
+            "digest": entry.get("digest", ""),
+            "cached_at": entry.get("cached_at", ""),
+            "tags": self._persist_tags(entry.get("tags") or {}),
+            "show": self._persist_show(entry.get("show")),
+        }
+
+    def _persist_tags(self, tags: dict) -> dict:
+        if not isinstance(tags, dict):
+            return {}
+        return {
+            key: tags.get(key)
+            for key in self.PERSISTED_TAGS_FIELDS
+            if key in tags
+        }
+
+    def _persist_show(self, show: dict | None) -> dict | None:
+        if show is None:
+            return None
+        if not isinstance(show, dict):
+            return {}
+
+        details = show.get("details")
+        if not isinstance(details, dict):
+            details = {}
+
+        persisted = {
+            "details": {
+                key: details.get(key)
+                for key in self.PERSISTED_DETAILS_FIELDS
+                if key in details
+            },
+            "capabilities": show.get("capabilities") or details.get("capabilities") or [],
+            "modified_at": show.get("modified_at"),
+            "context_window": self._extract_context_window(show),
+            "license_short": self._extract_license_short(show),
+            "has_system_prompt": self._extract_has_system_prompt(show),
+        }
+
+        if self._persist_sensitive_text:
+            for field_name in self.SENSITIVE_SHOW_FIELDS:
+                value = show.get(field_name)
+                if value:
+                    persisted[field_name] = value
+
+        return persisted
+
     def _normalize(self, name: str, entry: dict) -> dict:
         tags = entry.get("tags") or {}
         show = entry.get("show") or {}
         details = show.get("details") or tags.get("details") or {}
-        modelinfo = show.get("model_info") or {}
-
-        context_window = None
-        ctx_raw = next((v for k, v in modelinfo.items() if k.endswith(".context_length")), None)
-        if ctx_raw is not None:
-            try:
-                context_window = int(ctx_raw)
-            except (ValueError, TypeError):
-                pass
-
+        context_window = self._extract_context_window(show)
         license_full = show.get("license") or None
-        license_short = None
-        if license_full:
-            first_line = license_full.split("\n")[0].strip()
-            license_short = first_line[:80] if first_line else None
+        license_short = self._extract_license_short(show)
+        system_prompt = show.get("system_prompt")
+        if system_prompt is None:
+            system_prompt = show.get("system") or None
+        has_system_prompt = self._extract_has_system_prompt(show)
 
         size_bytes = tags.get("size")
 
@@ -166,12 +246,48 @@ class ModelSearchCache:
             "context_window": context_window,
             "license_full": license_full,
             "license_short": license_short,
-            "system_prompt": show.get("system") or None,
+            "system_prompt": system_prompt,
+            "has_system_prompt": has_system_prompt,
             "template": show.get("template") or None,
             "parent_model": details.get("parent_model") or None,
             "parameters": show.get("parameters") or None,
-            "model_info": modelinfo,
+            "model_info": show.get("model_info") or {},
         }
+
+    def _extract_context_window(self, show: dict) -> int | None:
+        context_window = show.get("context_window")
+        if context_window is not None:
+            try:
+                return int(context_window)
+            except (ValueError, TypeError):
+                pass
+
+        modelinfo = show.get("model_info") or {}
+        ctx_raw = next((v for k, v in modelinfo.items() if k.endswith(".context_length")), None)
+        if ctx_raw is not None:
+            try:
+                return int(ctx_raw)
+            except (ValueError, TypeError):
+                pass
+
+        return None
+
+    def _extract_license_short(self, show: dict) -> str | None:
+        license_short = show.get("license_short")
+        if license_short:
+            return license_short
+
+        license_full = show.get("license") or None
+        if license_full:
+            first_line = license_full.split("\n")[0].strip()
+            return first_line[:80] if first_line else None
+
+        return None
+
+    def _extract_has_system_prompt(self, show: dict) -> bool:
+        if "has_system_prompt" in show:
+            return bool(show.get("has_system_prompt"))
+        return bool(show.get("system_prompt") or show.get("system"))
 
 
 def filter_models(models: list, filters: dict) -> list:
@@ -212,7 +328,9 @@ def _model_matches(model: dict, filters: dict) -> bool:
     if lic and lic != model.get("license_short"):
         return False
 
-    if filters.get("has_system_prompt") is True and not model.get("system_prompt"):
+    if filters.get("has_system_prompt") is True and not (
+        model.get("has_system_prompt") or model.get("system_prompt")
+    ):
         return False
 
     parent_query = (filters.get("parent_model") or "").strip().lower()

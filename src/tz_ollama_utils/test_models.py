@@ -1,15 +1,18 @@
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
+from urllib.parse import urlsplit
 
 from .common import clean_text
 from .common import default_emit
 from .common import format_bytes
+from .common import is_loopback_host
 from .common import normalize_ollama_api_base_url
 from .common import read_response_text_limited
 from .common import ResponseTooLargeError
@@ -29,6 +32,9 @@ API_TIMEOUT_SECONDS = 30
 STOP_TIMEOUT_SECONDS = 30
 NVIDIA_SMI_TIMEOUT_SECONDS = 10
 OLLAMA_API_BASE_URL = "http://127.0.0.1:11434/api"
+WINDOWS_ABSOLUTE_PATH_RE = re.compile(r"(?<!\w)[A-Za-z]:[\\/][^\s\"']+")
+POSIX_ABSOLUTE_PATH_RE = re.compile(r"(?<![:\w])/(?:[^/\s\"']+/)*[^/\s\"']+")
+URL_RE = re.compile(r"https?://[^\s\"']+")
 
 
 def parse_parameters_text(parameters_text):
@@ -171,6 +177,14 @@ def parse_args(argv):
         action="store_true",
         help="Allow non-loopback Ollama API hosts. Remote hosts must use https.",
     )
+    parser.add_argument(
+        "--include-metadata-previews",
+        action="store_true",
+        help=(
+            "Include preview text for metadata fields like license, system prompt, "
+            "template, modelfile, and parameters in the YAML report."
+        ),
+    )
 
     args = parser.parse_args(argv[1:])
 
@@ -266,7 +280,61 @@ def build_skip(model, model_size_bytes, device_vram_bytes):
     }
 
 
-def sanitize_model_metadata(metadata):
+def _redact_url_match(match):
+    url = match.group(0)
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return "<redacted-url>"
+
+    if is_loopback_host(parsed.hostname):
+        return url
+
+    return "<redacted-remote-url>"
+
+
+def redact_export_text(value):
+    cleaned = clean_text(value)
+    if not cleaned:
+        return cleaned
+
+    cleaned = URL_RE.sub(_redact_url_match, cleaned)
+    cleaned = WINDOWS_ABSOLUTE_PATH_RE.sub("<redacted-path>", cleaned)
+    cleaned = POSIX_ABSOLUTE_PATH_RE.sub("<redacted-path>", cleaned)
+    return cleaned
+
+
+def sanitize_export_value(value):
+    if isinstance(value, dict):
+        return {key: sanitize_export_value(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [sanitize_export_value(item) for item in value]
+    if isinstance(value, str):
+        return redact_export_text(value)
+    return value
+
+
+def redact_report_path_for_export(report_path):
+    try:
+        return str(report_path.resolve().name)
+    except OSError:
+        return report_path.name
+
+
+def sanitize_api_base_url_for_export(api_base_url):
+    cleaned = clean_text(api_base_url)
+    if not cleaned:
+        return cleaned
+
+    parsed = urlsplit(cleaned)
+    if is_loopback_host(parsed.hostname):
+        return cleaned
+
+    path = parsed.path or ""
+    return f"{parsed.scheme}://<redacted-host>{path}"
+
+
+def sanitize_model_metadata(metadata, include_previews=False):
     if not isinstance(metadata, dict):
         return metadata
 
@@ -274,13 +342,17 @@ def sanitize_model_metadata(metadata):
 
     parameters_text = sanitized.get("parameters")
     sanitized["parameters_parsed"] = parse_parameters_text(parameters_text)
-    sanitized["parameters_preview"] = truncate_with_metadata(parameters_text)
+    sanitized["parameters_available"] = bool(parameters_text)
+    sanitized["parameters_preview"] = (
+        truncate_with_metadata(parameters_text) if include_previews else None
+    )
 
     for field_name in ("license", "modelfile", "template", "system"):
         if field_name in sanitized:
             sanitized[f"{field_name}_available"] = bool(sanitized[field_name])
-            sanitized[f"{field_name}_preview"] = truncate_with_metadata(
-                sanitized[field_name]
+            sanitized[f"{field_name}_preview"] = (
+                truncate_with_metadata(sanitized[field_name])
+                if include_previews else None
             )
             del sanitized[field_name]
 
@@ -335,19 +407,21 @@ def build_model_overview(model_summary, model_metadata, fit_vram, device_vram_by
 def build_model_details(model_metadata):
     if not isinstance(model_metadata, dict):
         return {
-            "parameters_preview": truncate_with_metadata(None),
+            "parameters_available": False,
+            "parameters_preview": None,
             "license_available": False,
-            "license_preview": truncate_with_metadata(None),
+            "license_preview": None,
             "template_available": False,
-            "template_preview": truncate_with_metadata(None),
+            "template_preview": None,
             "modelfile_available": False,
-            "modelfile_preview": truncate_with_metadata(None),
+            "modelfile_preview": None,
             "system_available": False,
-            "system_preview": truncate_with_metadata(None),
+            "system_preview": None,
         }
 
     return {
         "parameters_preview": model_metadata.get("parameters_preview"),
+        "parameters_available": model_metadata.get("parameters_available", False),
         "license_available": model_metadata.get("license_available", False),
         "license_preview": model_metadata.get("license_preview"),
         "template_available": model_metadata.get("template_available", False),
@@ -457,14 +531,14 @@ def get_models(api_base_url):
     return api_models, "api", warnings
 
 
-def get_model_metadata(model_name, api_base_url):
+def get_model_metadata(model_name, api_base_url, include_previews=False):
     metadata = run_ollama_api(
         "POST",
         "/show",
         api_base_url=api_base_url,
         payload={"model": model_name},
     )
-    return sanitize_model_metadata(metadata)
+    return sanitize_model_metadata(metadata, include_previews=include_previews)
 
 
 def get_device_vram_bytes():
@@ -928,7 +1002,11 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
             metadata_error = None
             if api_server_available:
                 try:
-                    metadata = get_model_metadata(model, api_base_url)
+                    metadata = get_model_metadata(
+                        model,
+                        api_base_url,
+                        include_previews=args.include_metadata_previews,
+                    )
                 except RuntimeError as exc:
                     metadata_error = str(exc)
                     add_warning(
@@ -1004,12 +1082,13 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
 
     report = {
         "generated_at": timestamp_now(),
-        "report_path": str(report_path),
-        "api_base_url": api_base_url,
+        "report_path": redact_report_path_for_export(report_path),
+        "api_base_url": sanitize_api_base_url_for_export(api_base_url),
         "api_server_available": api_server_available,
         "inventory_source": inventory_source,
         "timeout_seconds": args.timeout_seconds,
         "fit_vram": args.fit_vram,
+        "metadata_previews_included": args.include_metadata_previews,
         "device_vram_bytes": device_vram_bytes,
         "device_vram_human": format_bytes(device_vram_bytes),
         "device_vram_source": device_vram_source,
@@ -1023,7 +1102,17 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
         "skips": skips,
         "failures": failures,
         "models": model_records,
+        "retained_data": {
+            "report_path": "filename only",
+            "api_base_url": "loopback preserved; remote host redacted",
+            "metadata_previews": (
+                "included by opt-in" if args.include_metadata_previews else "not included"
+            ),
+            "warnings_failures_attempts": "absolute paths and remote URLs redacted",
+        },
     }
+
+    report = sanitize_export_value(report)
 
     try:
         write_yaml_report(report, report_path)
