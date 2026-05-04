@@ -2,7 +2,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from tz_ollama_utils.search_models import ModelSearchCache
+from tz_ollama_utils.search_models import ModelSearchCache, filter_models
 
 
 def test_load_returns_false_when_file_missing(tmp_path):
@@ -316,3 +316,95 @@ def test_normalize_handles_fully_empty_show():
     assert m["family"] is None
     assert m["capabilities"] == []
     assert m["size_bytes"] == 0
+
+
+def _m(**kwargs):
+    base = {
+        "name": "test:latest", "family": "llama", "capabilities": ["completion"],
+        "parameter_size": "7B", "quantization_level": "Q4_K_M",
+        "size_bytes": 4_000_000_000, "context_window": 8192,
+        "license_short": "MIT", "system_prompt": None, "parent_model": None,
+    }
+    base.update(kwargs)
+    return base
+
+
+def test_filter_empty_filters_returns_all():
+    models = [_m(name="a:latest"), _m(name="b:latest")]
+    assert filter_models(models, {}) == models
+
+
+def test_filter_by_name_substring():
+    models = [_m(name="llama3.2:3b"), _m(name="mistral:7b")]
+    result = filter_models(models, {"name": "llama"})
+    assert [r["name"] for r in result] == ["llama3.2:3b"]
+
+
+def test_filter_by_name_case_insensitive():
+    assert len(filter_models([_m(name="Llama3:latest")], {"name": "llama"})) == 1
+
+
+def test_filter_by_family():
+    models = [_m(family="llama"), _m(family="gemma")]
+    assert filter_models(models, {"family": "llama"})[0]["family"] == "llama"
+    assert len(filter_models(models, {"family": "llama"})) == 1
+
+
+def test_filter_capabilities_requires_all():
+    models = [_m(capabilities=["completion", "tools"]), _m(capabilities=["completion"])]
+    result = filter_models(models, {"capabilities": {"completion", "tools"}})
+    assert len(result) == 1
+    assert "tools" in result[0]["capabilities"]
+
+
+def test_filter_by_parameter_size():
+    models = [_m(parameter_size="7B"), _m(parameter_size="3B")]
+    assert filter_models(models, {"parameter_size": "7B"})[0]["parameter_size"] == "7B"
+    assert len(filter_models(models, {"parameter_size": "7B"})) == 1
+
+
+def test_filter_by_quantization():
+    models = [_m(quantization_level="Q4_K_M"), _m(quantization_level="Q8_0")]
+    assert len(filter_models(models, {"quantization_level": "Q8_0"})) == 1
+
+
+def test_filter_by_max_size_bytes():
+    models = [_m(size_bytes=2_000_000_000), _m(size_bytes=8_000_000_000)]
+    result = filter_models(models, {"max_size_bytes": 4_000_000_000})
+    assert len(result) == 1
+    assert result[0]["size_bytes"] == 2_000_000_000
+
+
+def test_filter_by_min_context():
+    models = [_m(context_window=4096), _m(context_window=32768)]
+    result = filter_models(models, {"min_context": 8192})
+    assert len(result) == 1
+    assert result[0]["context_window"] == 32768
+
+
+def test_filter_by_license():
+    models = [_m(license_short="MIT"), _m(license_short="Apache-2.0")]
+    assert len(filter_models(models, {"license_short": "MIT"})) == 1
+
+
+def test_filter_has_system_prompt():
+    models = [_m(system_prompt="You are helpful."), _m(system_prompt=None)]
+    result = filter_models(models, {"has_system_prompt": True})
+    assert len(result) == 1
+    assert result[0]["system_prompt"] is not None
+
+
+def test_filter_by_parent_model_substring():
+    models = [_m(parent_model="llama3.2"), _m(parent_model="gemma2")]
+    assert len(filter_models(models, {"parent_model": "llama"})) == 1
+
+
+def test_filter_and_combination():
+    models = [
+        _m(family="llama", capabilities=["completion", "tools"]),
+        _m(family="llama", capabilities=["completion"]),
+        _m(family="gemma", capabilities=["completion", "tools"]),
+    ]
+    result = filter_models(models, {"family": "llama", "capabilities": {"tools"}})
+    assert len(result) == 1
+    assert result[0]["family"] == "llama" and "tools" in result[0]["capabilities"]

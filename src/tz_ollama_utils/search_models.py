@@ -158,4 +158,48 @@ class ModelSearchCache:
 
 
 def filter_models(models: list, filters: dict) -> list:
-    return list(models)  # stub — expanded in Task 4
+    return [m for m in models if _model_matches(m, filters)]
+
+
+def _model_matches(model: dict, filters: dict) -> bool:
+    name_query = (filters.get("name") or "").strip().lower()
+    if name_query and name_query not in (model.get("name") or "").lower():
+        return False
+
+    family = filters.get("family") or ""
+    if family and family != model.get("family"):
+        return False
+
+    capabilities = filters.get("capabilities") or set()
+    if capabilities:
+        if not capabilities.issubset(set(model.get("capabilities") or [])):
+            return False
+
+    param_size = filters.get("parameter_size") or ""
+    if param_size and param_size != model.get("parameter_size"):
+        return False
+
+    quantization = filters.get("quantization_level") or ""
+    if quantization and quantization != model.get("quantization_level"):
+        return False
+
+    max_size = filters.get("max_size_bytes")
+    if max_size and (model.get("size_bytes") or 0) > max_size:
+        return False
+
+    min_ctx = filters.get("min_context")
+    if min_ctx and (model.get("context_window") or 0) < min_ctx:
+        return False
+
+    lic = filters.get("license_short") or ""
+    if lic and lic != model.get("license_short"):
+        return False
+
+    if filters.get("has_system_prompt") is True and not model.get("system_prompt"):
+        return False
+
+    parent_query = (filters.get("parent_model") or "").strip().lower()
+    if parent_query and parent_query not in (model.get("parent_model") or "").lower():
+        return False
+
+    return True
