@@ -19,6 +19,7 @@ a = Analysis(
     pathex=[str(project_root), str(source_dir)],
     binaries=[],
     datas=[
+        (str(project_root / "pyproject.toml"), "."),
         (str(assets_dir), "assets"),
         (str(package_assets_dir), "tz_ollama_utils/assets"),
     ],

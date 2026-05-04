@@ -1,6 +1,7 @@
 import queue
 import sys
 import threading
+import webbrowser
 from pathlib import Path
 
 from . import __version__
@@ -18,6 +19,7 @@ TEXT_DARK = "#1E1B18"
 TEXT_MUTED = "#5B5147"
 LOG_BG = "#16181C"
 LOG_FG = "#F5EBDD"
+REPO_URL = "https://github.com/taggedzi/tz-ollama-utils"
 
 
 def _asset_roots():
@@ -90,6 +92,7 @@ class OllamaUtilsApp:
         self.version_var = self.tk.StringVar(
             value=f"App v{__version__} | Ollama version: detecting..."
         )
+        self.about_window = None
         self.window_icon = None
         self.header_logo = None
 
@@ -438,10 +441,17 @@ class OllamaUtilsApp:
         footer = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 0, 18, 18))
         footer.grid(row=3, column=0, sticky="ew")
         footer.columnconfigure(0, weight=1)
+        footer.columnconfigure(1, weight=0)
 
         self.ttk.Label(footer, textvariable=self.version_var, style="Meta.TLabel").grid(
             row=0, column=0, sticky="w"
         )
+        self.ttk.Button(
+            footer,
+            text="About",
+            command=self.open_about_modal,
+            style="Quiet.TButton",
+        ).grid(row=0, column=1, sticky="e")
         self.ttk.Label(footer, textvariable=self.report_var, style="Meta.TLabel").grid(
             row=1, column=0, pady=(4, 0), sticky="w"
         )
@@ -480,6 +490,98 @@ class OllamaUtilsApp:
                 self.root.iconphoto(True, self.window_icon)
             except self.tk.TclError:
                 self.window_icon = None
+
+    def open_about_modal(self):
+        if self.about_window is not None and self.about_window.winfo_exists():
+            self.about_window.lift()
+            self.about_window.focus_force()
+            return
+
+        window = self.tk.Toplevel(self.root)
+        window.title("About TaggedZ's Ollama Utilities")
+        window.transient(self.root)
+        window.grab_set()
+        window.resizable(False, False)
+        window.configure(bg=APP_BG)
+        window.protocol("WM_DELETE_WINDOW", self.close_about_modal)
+        self.about_window = window
+
+        if self.window_icon is not None:
+            try:
+                window.iconphoto(True, self.window_icon)
+            except self.tk.TclError:
+                pass
+
+        container = self.ttk.Frame(window, style="Card.TFrame", padding=20)
+        container.grid(row=0, column=0, padx=18, pady=18, sticky="nsew")
+        container.columnconfigure(0, weight=1)
+
+        self.ttk.Label(
+            container,
+            text="TaggedZ's Ollama Utilities",
+            style="SectionTitle.TLabel",
+        ).grid(row=0, column=0, sticky="w")
+        self.ttk.Label(
+            container,
+            text=f"Version {__version__}",
+            style="Body.TLabel",
+        ).grid(row=1, column=0, pady=(6, 14), sticky="w")
+        self.ttk.Label(
+            container,
+            text=(
+                "Desktop tools for updating installed Ollama models, running inventory "
+                "checks, and saving YAML reports from one interface."
+            ),
+            style="Body.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=2, column=0, pady=(0, 10), sticky="w")
+        self.ttk.Label(
+            container,
+            text=(
+                "Requires a local or reachable Ollama CLI/API. "
+                "This utility does not bundle Ollama itself."
+            ),
+            style="Body.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=3, column=0, pady=(0, 10), sticky="w")
+        repo_link = self.ttk.Label(
+            container,
+            text=REPO_URL,
+            style="Body.TLabel",
+            cursor="hand2",
+        )
+        repo_link.grid(row=4, column=0, pady=(0, 16), sticky="w")
+        repo_link.bind("<Button-1>", lambda _event: self.open_repo_link())
+        self.ttk.Button(
+            container,
+            text="Close",
+            command=self.close_about_modal,
+            style="Quiet.TButton",
+        ).grid(row=5, column=0, sticky="e")
+
+        window.update_idletasks()
+        parent_x = self.root.winfo_rootx()
+        parent_y = self.root.winfo_rooty()
+        parent_width = self.root.winfo_width()
+        parent_height = self.root.winfo_height()
+        width = window.winfo_width()
+        height = window.winfo_height()
+        x = parent_x + max((parent_width - width) // 2, 0)
+        y = parent_y + max((parent_height - height) // 2, 0)
+        window.geometry(f"+{x}+{y}")
+        window.focus_force()
+
+    def close_about_modal(self):
+        if self.about_window is None:
+            return
+        if self.about_window.winfo_exists():
+            self.about_window.destroy()
+        self.about_window = None
+
+    def open_repo_link(self):
+        webbrowser.open(REPO_URL)
 
     def _load_versions(self):
         def worker():
