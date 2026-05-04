@@ -1,8 +1,10 @@
+import argparse
 import queue
 import re
 import sys
 import threading
 import webbrowser
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -14,9 +16,13 @@ from .test_models import DEFAULT_REPORT_PATH
 from .test_models import OLLAMA_API_BASE_URL
 from .test_models import main as test_main
 from .update_models import main as update_main
-import tkinter.messagebox as _mb
 from .common import clean_text, subprocess_window_kwargs, tool_command
 from .search_models import ModelSearchCache, filter_models
+
+try:
+    import tkinter.messagebox as _mb
+except ModuleNotFoundError:  # pragma: no cover - exercised only in headless envs
+    _mb = None
 
 APP_BG = "#F4EFE6"
 PANEL_BG = "#FBF7F1"
@@ -27,6 +33,7 @@ LOG_BG = "#16181C"
 LOG_FG = "#F5EBDD"
 REPO_URL = "https://github.com/taggedzi/tz-ollama-utils"
 _SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+DESTRUCTIVE_ACTIONS_ENV_VAR = "TZ_OLLAMA_UTILS_DISABLE_DESTRUCTIVE_ACTIONS"
 
 
 def _asset_roots():
@@ -72,13 +79,39 @@ def _configure_windows_app_id():
         pass
 
 
+def destructive_actions_enabled_from_env(env: dict | None = None) -> bool:
+    source = os.environ if env is None else env
+    value = str(source.get(DESTRUCTIVE_ACTIONS_ENV_VAR, "")).strip().lower()
+    return value not in {"1", "true", "yes", "on"}
+
+
+def parse_args(argv: list[str] | None = None):
+    if argv is None:
+        argv = sys.argv
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--disable-destructive-actions",
+        action="store_true",
+        help=(
+            "Disable GUI actions that modify or remove local models. "
+            f"Can also be controlled with {DESTRUCTIVE_ACTIONS_ENV_VAR}=1."
+        ),
+    )
+    args = parser.parse_args(argv[1:])
+    args.destructive_actions_enabled = (
+        destructive_actions_enabled_from_env() and not args.disable_destructive_actions
+    )
+    return args
+
+
 class OllamaUtilsApp:
-    def __init__(self, root, tk_module, ttk_module):
+    def __init__(self, root, tk_module, ttk_module, *, destructive_actions_enabled: bool = True):
         self.tk = tk_module
         self.ttk = ttk_module
         import tkinter.filedialog as _fd
         self.filedialog = _fd
         self.root = root
+        self._destructive_actions_enabled = destructive_actions_enabled
         self.root.title("Taggedz's Ollama Utilities")
         self._approved_remote_api_urls = set()
         self.root.geometry("1040x780")
@@ -118,6 +151,7 @@ class OllamaUtilsApp:
         self._search_loading = False
         self._search_sort_col: str | None = None
         self._search_sort_reverse: bool = False
+        self._delete_guard_note_var = self.tk.StringVar(value="")
         self._detail_canvas = None
         self._detail_vsb = None
         self._detail_placeholder = None
@@ -390,6 +424,14 @@ class OllamaUtilsApp:
             row1, text="⟳ Refresh", command=self._refresh_search_cache, style="Action.TButton"
         ).grid(row=0, column=bcol)
 
+        if not self._destructive_actions_enabled:
+            self._delete_guard_note_var.set("Delete actions are disabled by configuration.")
+            self.ttk.Label(
+                parent,
+                textvariable=self._delete_guard_note_var,
+                style="Body.TLabel",
+            ).grid(row=2, column=0, padx=12, pady=(8, 0), sticky="w")
+
         # --- Split pane ---
         split = self.ttk.Frame(parent, style="App.TFrame")
         split.grid(row=1, column=0, sticky="nsew", padx=(0, 0))
@@ -644,6 +686,8 @@ class OllamaUtilsApp:
             command=lambda: self._search_delete_model(model_name),
         )
         self._search_delete_btn.pack(side="left")
+        if not self._destructive_actions_enabled:
+            self._search_delete_btn.configure(state="disabled")
 
         # Separator
         self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
@@ -861,16 +905,157 @@ class OllamaUtilsApp:
         self.root.clipboard_append(name)
         self.append_log(f"Copied to clipboard: {name}")
 
+    def _search_model_by_name(self, name: str) -> dict | None:
+        return next((m for m in self._search_all_models if m["name"] == name), None)
+
+    def _confirm_destructive_model_delete(self, name: str, size_text: str) -> bool:
+        window = self.tk.Toplevel(self.root)
+        window.title("Confirm Model Delete")
+        window.transient(self.root)
+        window.resizable(False, False)
+        window.configure(bg=PANEL_BG)
+        window.grab_set()
+
+        frame = self.ttk.Frame(window, style="Card.TFrame", padding=16)
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+
+        self.ttk.Label(
+            frame,
+            text="Type the exact model name to confirm deletion.",
+            style="SectionTitle.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.ttk.Label(
+            frame,
+            text=(
+                "Target: "
+                f"{name}\n"
+                f"{name}\n"
+                f"Installed size: {size_text}"
+            ),
+            style="Body.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=1, column=0, pady=(10, 12), sticky="w")
+
+        warning = self.ttk.Frame(frame, style="Card.TFrame", padding=(10, 8))
+        warning.grid(row=2, column=0, sticky="ew")
+        warning.columnconfigure(1, weight=1)
+
+        self.ttk.Label(
+            warning,
+            text="⚠",
+            style="SectionTitle.TLabel",
+        ).grid(row=0, column=0, padx=(0, 8), sticky="nw")
+        self.ttk.Label(
+            warning,
+            text=(
+                "This runs `ollama rm` and permanently deletes the local model from Ollama.\n"
+                "This cannot be undone. If the model is still available upstream, you can "
+                "download it again later, but the local copy is not recoverable after deletion."
+            ),
+            style="Body.TLabel",
+            wraplength=390,
+            justify="left",
+        ).grid(row=0, column=1, sticky="w")
+
+        confirm_box = self.ttk.Frame(frame, style="Card.TFrame", padding=(0, 10, 0, 0))
+        confirm_box.grid(row=3, column=0, sticky="ew")
+        confirm_box.columnconfigure(0, weight=1)
+
+        self.ttk.Label(
+            confirm_box,
+            text="Confirmation",
+            style="FieldKey.TLabel",
+        ).grid(row=0, column=0, sticky="w")
+        self.ttk.Label(
+            confirm_box,
+            text=f"Type `{name}` exactly to enable deletion.",
+            style="Body.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=1, column=0, pady=(2, 6), sticky="w")
+
+        entry_var = self.tk.StringVar(value="")
+        entry = self.ttk.Entry(confirm_box, textvariable=entry_var, width=42)
+        entry.grid(row=2, column=0, sticky="ew")
+        entry.focus_set()
+
+        self.ttk.Label(
+            confirm_box,
+            text="Model name confirmation is case-sensitive.",
+            style="Body.TLabel",
+        ).grid(row=3, column=0, pady=(4, 0), sticky="w")
+
+        result = {"confirmed": False}
+
+        def close():
+            window.grab_release()
+            window.destroy()
+
+        def confirm():
+            if entry_var.get() != name:
+                _mb.showerror(
+                    "Delete Model",
+                    "Confirmation text did not match the exact model name.",
+                    parent=window,
+                )
+                return
+            result["confirmed"] = True
+            close()
+
+        actions = self.ttk.Frame(frame, style="Card.TFrame")
+        actions.grid(row=4, column=0, pady=(12, 0), sticky="e")
+        self.ttk.Button(
+            actions,
+            text="Cancel",
+            command=close,
+            style="Quiet.TButton",
+        ).pack(side="left", padx=(0, 6))
+        self.ttk.Button(
+            actions,
+            text="Delete Model",
+            command=confirm,
+            style="Action.TButton",
+        ).pack(side="left")
+
+        window.bind("<Return>", lambda _event: confirm())
+        window.bind("<Escape>", lambda _event: close())
+        window.protocol("WM_DELETE_WINDOW", close)
+        self.root.wait_window(window)
+        return result["confirmed"]
+
     def _search_delete_model(self, name: str):
-        confirmed = _mb.askyesno(
-            "Delete Model",
-            f"Delete '{name}'?\n\nThis removes the model from Ollama and cannot be undone.",
-            icon="warning",
-            parent=self.root,
-        )
-        if not confirmed:
+        model = self._search_model_by_name(name)
+        size_text = (model or {}).get("size_human") or "unknown"
+        if not self._destructive_actions_enabled:
+            self.append_log(
+                f"[DESTRUCTIVE] Blocked delete for target={name} size={size_text}: "
+                "destructive actions disabled by configuration."
+            )
+            _mb.showwarning(
+                "Delete Disabled",
+                (
+                    "Delete actions are disabled by configuration.\n\n"
+                    f"Target: {name}\n"
+                    f"Installed size: {size_text}"
+                ),
+                parent=self.root,
+            )
             return
 
+        confirmed = self._confirm_destructive_model_delete(name, size_text)
+        if not confirmed:
+            self.append_log(
+                f"[DESTRUCTIVE] Delete cancelled for target={name} size={size_text}."
+            )
+            return
+
+        self.append_log(
+            f"[DESTRUCTIVE] Delete requested for target={name} size={size_text}."
+        )
         self.append_log(f"=== Deleting {name} ===")
         if self._search_delete_btn:
             self._search_delete_btn.configure(state="disabled")
@@ -886,10 +1071,30 @@ class OllamaUtilsApp:
                     **subprocess_window_kwargs(),
                 )
                 if result.returncode == 0:
-                    self.log_queue.put({"kind": "log", "message": f"Deleted {name} successfully."})
+                    self.log_queue.put(
+                        {
+                            "kind": "log",
+                            "message": (
+                                f"[DESTRUCTIVE] Delete succeeded for target={name} "
+                                f"size={size_text}."
+                            ),
+                        }
+                    )
+                    self.log_queue.put(
+                        {"kind": "log", "message": f"Deleted {name} successfully."}
+                    )
                     self.root.after(0, lambda: self._after_search_delete(name))
                 else:
                     err = clean_text(result.stderr) or f"exit code {result.returncode}"
+                    self.log_queue.put(
+                        {
+                            "kind": "log",
+                            "message": (
+                                f"[DESTRUCTIVE] Delete failed for target={name} "
+                                f"size={size_text}: {err}"
+                            ),
+                        }
+                    )
                     self.log_queue.put({"kind": "log", "message": f"Delete failed: {err}"})
                     def _reenable_delete_btn():
                         try:
@@ -899,6 +1104,15 @@ class OllamaUtilsApp:
                             pass
                     self.root.after(0, _reenable_delete_btn)
             except Exception as exc:
+                self.log_queue.put(
+                    {
+                        "kind": "log",
+                        "message": (
+                            f"[DESTRUCTIVE] Delete error for target={name} "
+                            f"size={size_text}: {exc}"
+                        ),
+                    }
+                )
                 self.log_queue.put({"kind": "log", "message": f"Delete error: {exc}"})
                 def _reenable_delete_btn_err():
                     try:
@@ -1570,7 +1784,8 @@ class OllamaUtilsApp:
         )
 
 
-def main():
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     try:
         import tkinter as tk
         from tkinter import ttk
@@ -1584,7 +1799,12 @@ def main():
 
     _configure_windows_app_id()
     root = tk.Tk()
-    OllamaUtilsApp(root, tk, ttk)
+    OllamaUtilsApp(
+        root,
+        tk,
+        ttk,
+        destructive_actions_enabled=args.destructive_actions_enabled,
+    )
     root.mainloop()
     return 0
 

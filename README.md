@@ -157,6 +157,18 @@ Installed entry point:
 tz-ollama-utils-gui
 ```
 
+Disable destructive actions at runtime:
+
+```bash
+tz-ollama-utils-gui --disable-destructive-actions
+```
+
+Or via environment variable, which is useful for packaged desktop builds:
+
+```bash
+TZ_OLLAMA_UTILS_DISABLE_DESTRUCTIVE_ACTIONS=1 tz-ollama-utils-gui
+```
+
 The GUI provides:
 
 - separate `Update` and `Test & Report` tabs
@@ -178,6 +190,8 @@ GUI notes:
 - the test tab warns at startup when the configured Ollama API server is not reachable, which usually means the Ollama app or server needs to be started manually
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 - the Search & Discover disk cache retains a minimized model summary by default; set `TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT=1` only if you explicitly want long text fields like prompts, templates, modelfiles, parameters, and full license text written to `~/.tz_ollama_utils/model_cache.json`
+- Search & Discover model deletion now requires typing the exact model name and shows the exact target plus installed size before `ollama rm` runs
+- destructive GUI actions can be disabled entirely with `--disable-destructive-actions` or `TZ_OLLAMA_UTILS_DISABLE_DESTRUCTIVE_ACTIONS=1`
 
 ## YAML Report
 
