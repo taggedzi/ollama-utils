@@ -1,4 +1,5 @@
 import queue
+import re
 import sys
 import threading
 import webbrowser
@@ -112,6 +113,8 @@ class OllamaUtilsApp:
         self._search_params_text = None
         self._search_params_toggle_btn = None
         self._search_loading = False
+        self._search_sort_col: str | None = None
+        self._search_sort_reverse: bool = False
         self._detail_canvas = None
         self._detail_vsb = None
         self._detail_placeholder = None
@@ -451,6 +454,50 @@ class OllamaUtilsApp:
 
         return filters
 
+    def _sort_search_tree(self, col: str):
+        if self._search_tree is None:
+            return
+        if self._search_sort_col == col:
+            self._search_sort_reverse = not self._search_sort_reverse
+        else:
+            self._search_sort_col = col
+            self._search_sort_reverse = False
+
+        def sort_key(iid):
+            val = self._search_tree.set(iid, col)
+            if col == "params":
+                m = re.match(r"([\d.]+)\s*([BbMmKk]?)", val.strip())
+                if m:
+                    num = float(m.group(1))
+                    suffix = m.group(2).upper()
+                    mult = {"B": 1e9, "M": 1e6, "K": 1e3}.get(suffix, 1)
+                    return num * mult
+                return 0.0
+            if col == "size":
+                m = re.match(r"([\d.]+)\s*([KMGTP]?B?)", val.strip(), re.IGNORECASE)
+                if m:
+                    num = float(m.group(1))
+                    unit = m.group(2).upper().rstrip("B")
+                    mult = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4, "P": 1024**5}.get(unit, 1)
+                    return num * mult
+                return 0.0
+            return val.lower()
+
+        items = list(self._search_tree.get_children(""))
+        items.sort(key=sort_key, reverse=self._search_sort_reverse)
+        for i, iid in enumerate(items):
+            self._search_tree.move(iid, "", i)
+
+        # Update heading arrows
+        arrow_up, arrow_down = " ▲", " ▼"
+        labels = {"name": "Name", "family": "Family", "params": "Params", "size": "Size"}
+        for c, label in labels.items():
+            if c == col:
+                arrow = arrow_down if self._search_sort_reverse else arrow_up
+                self._search_tree.heading(c, text=label + arrow)
+            else:
+                self._search_tree.heading(c, text=label)
+
     def _repopulate_tree(self, models: list):
         tree = self._search_tree
         if tree is None:
@@ -470,6 +517,12 @@ class OllamaUtilsApp:
                 ))
             except self.tk.TclError:
                 pass
+        # Re-apply sort if one is active
+        if self._search_sort_col:
+            col = self._search_sort_col
+            self._search_sort_col = None  # reset so _sort_search_tree toggles correctly
+            self._search_sort_reverse = not self._search_sort_reverse  # pre-flip since toggle flips it back
+            self._sort_search_tree(col)
 
     def _on_model_select(self, event):
         if not self._search_tree:
@@ -493,11 +546,11 @@ class OllamaUtilsApp:
         tree = self.ttk.Treeview(list_frame, columns=columns, show="headings", selectmode="browse")
         self._search_tree = tree
 
-        tree.heading("name", text="Name")
-        tree.heading("family", text="Family")
-        tree.heading("params", text="Params")
+        tree.heading("name", text="Name", command=lambda: self._sort_search_tree("name"))
+        tree.heading("family", text="Family", command=lambda: self._sort_search_tree("family"))
+        tree.heading("params", text="Params", command=lambda: self._sort_search_tree("params"))
         tree.heading("quant", text="Quant")
-        tree.heading("size", text="Size")
+        tree.heading("size", text="Size", command=lambda: self._sort_search_tree("size"))
         tree.heading("caps", text="Caps")
 
         tree.column("name", width=180, minwidth=120, stretch=True)
