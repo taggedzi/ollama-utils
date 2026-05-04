@@ -24,6 +24,7 @@ This project is designed for people who keep a local library of Ollama models an
 - record a concise per-model inventory
 - smoke-test models after updates
 - preserve a YAML report that is practical to review later
+- Search and Discover models based on metadata
 
 The reporting is intentionally opinionated:
 
@@ -33,8 +34,11 @@ The reporting is intentionally opinionated:
 
 ## Screenshots
 
-![screenshot](docs/screenshots/python_upIulaCyfr.png)
-![screenshot](docs/screenshots/python_st4mPQ4vzT.png)
+![screenshot](docs/screenshots/python_wByssWkfrC.png)
+
+![screenshot](docs/screenshots/python_67yw3cTKdY.png)
+
+![screenshot](docs/screenshots/python_S8aIap5jgo.png)
 
 ## Requirements
 
@@ -62,6 +66,7 @@ If `nvidia-smi` is available, `tz_ollama_utils_test.py` measures total GPU VRAM 
 ├── src/tz_ollama_utils/       # installable package
 │   ├── common.py
 │   ├── gui.py
+│   ├── search_models.py
 │   ├── test_models.py
 │   └── update_models.py
 ├── assets/                    # application icons, favicons, and web images
