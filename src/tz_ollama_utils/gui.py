@@ -984,93 +984,112 @@ class OllamaUtilsApp:
         parent.columnconfigure(0, weight=2)
         parent.columnconfigure(1, weight=3)
 
+        # Compact banner — description + warning without a section title
+        banner = self._make_card(parent)
+        banner.grid(row=0, column=0, columnspan=2, pady=(0, 8), sticky="ew")
+        banner.columnconfigure(0, weight=1)
+        self.ttk.Label(
+            banner,
+            text=(
+                "Runs a prompt against every locally available Ollama model and writes "
+                "a YAML report with response quality, VRAM usage, and timing."
+            ),
+            style="Body.TLabel",
+            wraplength=700,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w")
+        self.ttk.Label(
+            banner,
+            text="⚠️  Runtime scales with model count and system resources — this may take a while.",
+            style="Body.TLabel",
+            wraplength=700,
+            justify="left",
+        ).grid(row=1, column=0, pady=(4, 0), sticky="w")
+
+        # Settings card — no sub-description, tighter row padding
         settings = self._make_card(parent)
-        settings.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
+        settings.grid(row=1, column=0, padx=(0, 10), sticky="nsew")
         settings.columnconfigure(1, weight=1)
 
         self.ttk.Label(settings, text="Test Settings", style="SectionTitle.TLabel").grid(
-            row=0, column=0, columnspan=2, sticky="w"
+            row=0, column=0, columnspan=2, pady=(0, 10), sticky="w"
         )
-        self.ttk.Label(
-            settings,
-            text="Control timeout, VRAM policy, and report destination for the inventory run.",
-            style="Body.TLabel",
-            wraplength=320,
-            justify="left",
-        ).grid(row=1, column=0, columnspan=2, pady=(8, 16), sticky="w")
 
         self.ttk.Label(settings, text="Per-model timeout (seconds)", style="Body.TLabel").grid(
-            row=2, column=0, padx=(0, 10), pady=(0, 10), sticky="w"
+            row=1, column=0, padx=(0, 10), pady=(0, 6), sticky="w"
         )
         self.ttk.Entry(settings, textvariable=self.timeout_var, width=12).grid(
-            row=2, column=1, pady=(0, 10), sticky="ew"
+            row=1, column=1, pady=(0, 6), sticky="ew"
         )
 
         self.ttk.Label(settings, text="Manual VRAM override (MiB)", style="Body.TLabel").grid(
-            row=3, column=0, padx=(0, 10), pady=(0, 10), sticky="w"
+            row=2, column=0, padx=(0, 10), pady=(0, 6), sticky="w"
         )
         self.ttk.Entry(settings, textvariable=self.vram_override_var, width=12).grid(
-            row=3, column=1, pady=(0, 10), sticky="ew"
+            row=2, column=1, pady=(0, 6), sticky="ew"
         )
 
         self.ttk.Label(settings, text="Ollama API base URL", style="Body.TLabel").grid(
-            row=4, column=0, padx=(0, 10), pady=(0, 10), sticky="w"
+            row=3, column=0, padx=(0, 10), pady=(0, 6), sticky="w"
         )
         self.ttk.Entry(settings, textvariable=self.api_base_url_var).grid(
-            row=4, column=1, pady=(0, 10), sticky="ew"
+            row=3, column=1, pady=(0, 6), sticky="ew"
         )
 
         self.ttk.Checkbutton(
             settings,
             text="Ignore VRAM size filter entirely",
             variable=self.ignore_size_var,
-        ).grid(row=5, column=0, columnspan=2, pady=(2, 0), sticky="w")
+        ).grid(row=4, column=0, columnspan=2, pady=(4, 0), sticky="w")
 
+        # Report card — no sub-description; hint moved inline below the entry
         report = self._make_card(parent)
-        report.grid(row=0, column=1, sticky="nsew")
+        report.grid(row=1, column=1, sticky="nsew")
         report.columnconfigure(0, weight=1)
         report.columnconfigure(1, weight=0)
 
         self.ttk.Label(report, text="Report Output", style="SectionTitle.TLabel").grid(
-            row=0, column=0, columnspan=2, sticky="w"
+            row=0, column=0, columnspan=2, pady=(0, 10), sticky="w"
         )
-        self.ttk.Label(
-            report,
-            text=(
-                "Choose where the YAML report should be written. Partial reports are "
-                "still saved when a test run is stopped."
-            ),
-            style="Body.TLabel",
-            wraplength=460,
-            justify="left",
-        ).grid(row=1, column=0, columnspan=2, pady=(8, 16), sticky="w")
 
         self.ttk.Entry(report, textvariable=self.report_path_var).grid(
-            row=2, column=0, padx=(0, 8), sticky="ew"
+            row=1, column=0, padx=(0, 8), sticky="ew"
         )
         self.ttk.Button(
             report,
             text="Browse",
             command=self.choose_report_path,
             style="Quiet.TButton",
-        ).grid(row=2, column=1, sticky="ew")
+        ).grid(row=1, column=1, sticky="ew")
+
+        self.ttk.Label(
+            report,
+            text="Partial reports are saved if the run is stopped early.",
+            style="Body.TLabel",
+            justify="left",
+        ).grid(row=2, column=0, columnspan=2, pady=(4, 0), sticky="w")
+
+        btn_row = self.ttk.Frame(report, style="Card.TFrame")
+        btn_row.grid(row=3, column=0, columnspan=2, pady=(12, 0), sticky="ew")
+        btn_row.columnconfigure(0, weight=1)
+        btn_row.columnconfigure(1, weight=1)
 
         self.test_button = self.ttk.Button(
-            report,
+            btn_row,
             text="Start Test and Inventory",
             command=self.run_test,
             style="Action.TButton",
         )
-        self.test_button.grid(row=3, column=0, columnspan=2, pady=(16, 10), sticky="ew")
+        self.test_button.grid(row=0, column=0, padx=(0, 4), sticky="ew")
 
         self.test_stop_button = self.ttk.Button(
-            report,
+            btn_row,
             text="Stop Test Job",
             command=self.stop_run,
             state="disabled",
             style="Quiet.TButton",
         )
-        self.test_stop_button.grid(row=4, column=0, columnspan=2, sticky="ew")
+        self.test_stop_button.grid(row=0, column=1, padx=(4, 0), sticky="ew")
 
     def _build_activity_area(self):
         activity = self.ttk.Frame(self.root, style="App.TFrame", padding=(18, 0, 18, 10))
