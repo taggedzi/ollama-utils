@@ -9,6 +9,8 @@ from tz_ollama_utils.test_models import (
     redact_export_text,
     sanitize_api_base_url_for_export,
     sanitize_model_metadata,
+    validate_report_path,
+    write_yaml_report,
 )
 
 
@@ -64,6 +66,16 @@ def test_parse_args_metadata_previews_default_false():
 def test_parse_args_metadata_previews_opt_in():
     args = parse_args(["tz-ollama-utils-test", "--include-metadata-previews"])
     assert args.include_metadata_previews is True
+
+
+def test_parse_args_force_default_false():
+    args = parse_args(["tz-ollama-utils-test"])
+    assert args.force is False
+
+
+def test_parse_args_force_opt_in():
+    args = parse_args(["tz-ollama-utils-test", "--force"])
+    assert args.force is True
 
 
 # --- parse_parameters_text ---
@@ -133,6 +145,61 @@ def test_redact_export_text_redacts_remote_urls_and_absolute_paths():
 def test_sanitize_api_base_url_preserves_loopback_and_redacts_remote_host():
     assert sanitize_api_base_url_for_export("http://127.0.0.1:11434/api") == "http://127.0.0.1:11434/api"
     assert sanitize_api_base_url_for_export("https://example.com:11434/api") == "https://<redacted-host>/api"
+
+
+def test_validate_report_path_rejects_non_yaml_suffix(tmp_path):
+    with pytest.raises(ValueError, match=r"\.yaml"):
+        validate_report_path(tmp_path / "report.txt")
+
+
+def test_validate_report_path_rejects_existing_file_without_force(tmp_path):
+    report_path = tmp_path / "report.yaml"
+    report_path.write_text("existing\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--force"):
+        validate_report_path(report_path)
+
+
+def test_validate_report_path_accepts_existing_file_with_force(tmp_path):
+    report_path = tmp_path / "report.yaml"
+    report_path.write_text("existing\n", encoding="utf-8")
+
+    assert validate_report_path(report_path, force=True) == report_path
+
+
+def test_validate_report_path_rejects_symlink_target(tmp_path):
+    target = tmp_path / "report.yaml"
+    target.write_text("existing\n", encoding="utf-8")
+    symlink_path = tmp_path / "linked.yaml"
+    try:
+        symlink_path.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"Symlinks unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="symlink"):
+        validate_report_path(symlink_path, force=True)
+
+
+def test_validate_report_path_rejects_symlink_parent(tmp_path):
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    link_dir = tmp_path / "linked-dir"
+    try:
+        link_dir.symlink_to(real_dir, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"Symlinks unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="symlinked directories"):
+        validate_report_path(link_dir / "report.yaml", force=True)
+
+
+def test_write_yaml_report_force_overwrites_existing_file(tmp_path):
+    report_path = tmp_path / "report.yaml"
+    report_path.write_text("old\n", encoding="utf-8")
+
+    write_yaml_report({"status": "new"}, report_path, force=True)
+
+    assert 'status: "new"' in report_path.read_text(encoding="utf-8")
 
 
 # --- classify_failure ---

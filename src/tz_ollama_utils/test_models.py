@@ -35,6 +35,7 @@ OLLAMA_API_BASE_URL = "http://127.0.0.1:11434/api"
 WINDOWS_ABSOLUTE_PATH_RE = re.compile(r"(?<!\w)[A-Za-z]:[\\/][^\s\"']+")
 POSIX_ABSOLUTE_PATH_RE = re.compile(r"(?<![:\w])/(?:[^/\s\"']+/)*[^/\s\"']+")
 URL_RE = re.compile(r"https?://[^\s\"']+")
+REPORT_PATH_SUFFIX = ".yaml"
 
 
 def parse_parameters_text(parameters_text):
@@ -65,6 +66,7 @@ def run_cmd(args, timeout, input_text=None):
         errors="replace",
         **subprocess_window_kwargs(),
     )
+
 
 def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT_SECONDS):
     url = f"{api_base_url}{path}"
@@ -162,7 +164,15 @@ def parse_args(argv):
         "--report-path",
         type=Path,
         default=DEFAULT_REPORT_PATH,
-        help=f"Write the YAML report to this path. Default: {DEFAULT_REPORT_PATH}.",
+        help=(
+            f"Write the YAML report to this path. Must end in {REPORT_PATH_SUFFIX}. "
+            f"Default: {DEFAULT_REPORT_PATH}."
+        ),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow overwriting an existing YAML report file.",
     )
     parser.add_argument(
         "--api-base-url",
@@ -203,9 +213,43 @@ def parse_args(argv):
     return args
 
 
-def write_yaml_report(report, report_path):
+def normalize_report_path(report_path):
+    normalized = Path(report_path).expanduser()
+    if not normalized.is_absolute():
+        normalized = Path.cwd() / normalized
+    return normalized
+
+
+def validate_report_path(report_path, *, force=False):
+    report_path = normalize_report_path(report_path)
+
+    if report_path.suffix.lower() != REPORT_PATH_SUFFIX:
+        raise ValueError(f"Report path must end with {REPORT_PATH_SUFFIX}.")
+
+    for parent in reversed(report_path.parents):
+        if parent.is_symlink():
+            raise ValueError(f"Report path cannot use symlinked directories: {parent}")
+        if parent.exists() and not parent.is_dir():
+            raise ValueError(f"Report path parent is not a directory: {parent}")
+
+    if report_path.is_symlink():
+        raise ValueError(f"Report path cannot be a symlink: {report_path}")
+    if report_path.exists():
+        if not report_path.is_file():
+            raise ValueError(f"Report path must be a regular file: {report_path}")
+        if not force:
+            raise ValueError(
+                f"Report path already exists: {report_path}. Re-run with --force to overwrite it."
+            )
+
+    return report_path
+
+
+def write_yaml_report(report, report_path, *, force=False):
+    report_path = validate_report_path(report_path, force=force)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text("\n".join(yaml_dump_lines(report)) + "\n", encoding="utf-8")
+    with report_path.open("w" if force else "x", encoding="utf-8") as handle:
+        handle.write("\n".join(yaml_dump_lines(report)) + "\n")
 
 
 def add_warning(warnings, stage, message):
@@ -930,7 +974,11 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
     device_vram_source = "unavailable"
     inventory_source = "unknown"
     api_server_available = True
-    report_path = args.report_path.resolve()
+    try:
+        report_path = validate_report_path(args.report_path, force=args.force)
+    except ValueError as exc:
+        emit(f"Argument error: {exc}")
+        return 2
     api_base_url = args.api_base_url
 
     api_server_available, server_error = check_ollama_server(api_base_url)
@@ -977,6 +1025,8 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
     emit(f"Ollama API base URL: {api_base_url}")
     emit(f"Inventory source: {inventory_source}")
     emit(f"Report path: {report_path}")
+    if args.force and report_path.exists():
+        emit(f"Warning: overwriting existing report file: {report_path}")
     if args.fit_vram and device_vram_bytes is not None:
         emit(
             f"Startup device VRAM filter: {format_bytes(device_vram_bytes)}"
@@ -1115,8 +1165,8 @@ def main(argv=None, emit=None, stop_requested=None, progress=None):
     report = sanitize_export_value(report)
 
     try:
-        write_yaml_report(report, report_path)
-    except OSError as exc:
+        write_yaml_report(report, report_path, force=args.force)
+    except (OSError, ValueError) as exc:
         emit(f"Failed to write YAML report {report_path}: {exc}")
         return 1
 

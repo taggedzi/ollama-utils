@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from tz_ollama_utils.gui import (
     DESTRUCTIVE_ACTIONS_ENV_VAR,
     OllamaUtilsApp,
@@ -67,3 +69,61 @@ def test_search_delete_logs_cancelled_delete():
     app._search_delete_model("llama3.2:3b")
 
     assert any("Delete cancelled" in line for line in logged)
+
+
+def test_selected_report_path_rejects_existing_file(tmp_path):
+    report_path = tmp_path / "report.yaml"
+    report_path.write_text("existing\n", encoding="utf-8")
+
+    app = object.__new__(OllamaUtilsApp)
+    app.report_path_var = SimpleNamespace(get=lambda: str(report_path))
+    app.report_force_var = SimpleNamespace(get=lambda: False)
+
+    selected, error = app._selected_report_path()
+
+    assert selected is None
+    assert "--force" in error
+
+
+def test_selected_report_path_allows_existing_file_with_overwrite_opt_in(tmp_path):
+    report_path = tmp_path / "report.yaml"
+    report_path.write_text("existing\n", encoding="utf-8")
+
+    app = object.__new__(OllamaUtilsApp)
+    app.report_path_var = SimpleNamespace(get=lambda: str(report_path))
+    app.report_force_var = SimpleNamespace(get=lambda: True)
+
+    selected, error = app._selected_report_path()
+
+    assert error is None
+    assert selected == str(report_path)
+
+
+def test_selected_report_path_rejects_non_yaml_suffix(tmp_path):
+    app = object.__new__(OllamaUtilsApp)
+    app.report_path_var = SimpleNamespace(get=lambda: str(tmp_path / "report.yml"))
+    app.report_force_var = SimpleNamespace(get=lambda: False)
+
+    selected, error = app._selected_report_path()
+
+    assert selected is None
+    assert ".yaml" in error
+
+
+def test_selected_report_path_rejects_symlink_target(tmp_path):
+    target = tmp_path / "report.yaml"
+    target.write_text("existing\n", encoding="utf-8")
+    symlink_path = tmp_path / "linked.yaml"
+    try:
+        symlink_path.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"Symlinks unavailable: {exc}")
+
+    app = object.__new__(OllamaUtilsApp)
+    app.report_path_var = SimpleNamespace(get=lambda: str(symlink_path))
+    app.report_force_var = SimpleNamespace(get=lambda: True)
+
+    selected, error = app._selected_report_path()
+
+    assert selected is None
+    assert "symlink" in error

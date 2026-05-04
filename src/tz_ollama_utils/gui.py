@@ -15,6 +15,7 @@ from .common import normalize_ollama_api_base_url
 from .test_models import DEFAULT_REPORT_PATH
 from .test_models import OLLAMA_API_BASE_URL
 from .test_models import main as test_main
+from .test_models import validate_report_path
 from .update_models import main as update_main
 from .common import clean_text, subprocess_window_kwargs, tool_command
 from .search_models import ModelSearchCache, filter_models
@@ -128,6 +129,7 @@ class OllamaUtilsApp:
         self.api_base_url_var = self.tk.StringVar(value=OLLAMA_API_BASE_URL)
         self.status_var = self.tk.StringVar(value="Idle")
         self.report_path_var = self.tk.StringVar(value=str(DEFAULT_REPORT_PATH.resolve()))
+        self.report_force_var = self.tk.BooleanVar(value=False)
         self.active_job_var = self.tk.StringVar(value="No job running")
         self._liveness_var = self.tk.StringVar(value=" ")
         self._liveness_frame = 0
@@ -1350,15 +1352,21 @@ class OllamaUtilsApp:
             style="Quiet.TButton",
         ).grid(row=1, column=1, sticky="ew")
 
+        self.ttk.Checkbutton(
+            report,
+            text="Allow overwrite of an existing .yaml report file",
+            variable=self.report_force_var,
+        ).grid(row=2, column=0, columnspan=2, pady=(8, 0), sticky="w")
+
         self.ttk.Label(
             report,
-            text="Partial reports are saved if the run is stopped early.",
+            text="Partial reports are saved if the run is stopped early. Enabling overwrite will replace the target file.",
             style="Body.TLabel",
             justify="left",
-        ).grid(row=2, column=0, columnspan=2, pady=(4, 0), sticky="w")
+        ).grid(row=3, column=0, columnspan=2, pady=(4, 0), sticky="w")
 
         btn_row = self.ttk.Frame(report, style="Card.TFrame")
-        btn_row.grid(row=3, column=0, columnspan=2, pady=(12, 0), sticky="ew")
+        btn_row.grid(row=4, column=0, columnspan=2, pady=(12, 0), sticky="ew")
         btn_row.columnconfigure(0, weight=1)
         btn_row.columnconfigure(1, weight=1)
 
@@ -1673,7 +1681,15 @@ class OllamaUtilsApp:
         if not report_path:
             return None, "Report path is required."
 
-        return str(Path(report_path).expanduser()), None
+        try:
+            return str(
+                validate_report_path(
+                    report_path,
+                    force=bool(getattr(self, "report_force_var", None) and self.report_force_var.get()),
+                )
+            ), None
+        except ValueError as exc:
+            return None, str(exc)
 
     def _selected_api_base_url(self, allow_remote=False):
         try:
@@ -1726,7 +1742,7 @@ class OllamaUtilsApp:
             title="Choose YAML report path",
             defaultextension=".yaml",
             initialfile=Path(self.report_path_var.get()).name,
-            filetypes=[("YAML files", "*.yaml *.yml"), ("All files", "*.*")],
+            filetypes=[("YAML files", "*.yaml")],
         )
         if path:
             self.report_path_var.set(path)
@@ -1771,6 +1787,8 @@ class OllamaUtilsApp:
         if not is_loopback_host(urlsplit(api_base_url).hostname):
             argv.append("--allow-remote")
         argv.extend(["--api-base-url", api_base_url])
+        if self.report_force_var.get():
+            argv.append("--force")
         argv.extend(["--report-path", report_path])
 
         self._run_worker(
