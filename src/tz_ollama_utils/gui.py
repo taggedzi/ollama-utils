@@ -717,7 +717,44 @@ class OllamaUtilsApp:
             self._load_search_models()
 
     def _load_search_models(self):
-        pass
+        if self._search_tree is None:
+            return
+
+        # Show cached data immediately if available
+        self._search_cache.load()
+        cached = self._search_cache.get_models()
+        if cached:
+            self._search_all_models = cached
+            self._repopulate_tree(cached)
+            self._update_search_dropdowns()
+            if self._search_count_var:
+                self._search_count_var.set(f"Showing {len(cached)} of {len(cached)}")
+
+        api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
+        prefix = "Updating" if cached else "Loading"
+        self.append_log(f"=== Search: {prefix} model catalog from {api_url} ===")
+
+        def worker():
+            fetched = [0]
+
+            def on_progress(name, done, total):
+                fetched[0] = done
+                self.log_queue.put({"kind": "log", "message": f"  [{done}/{total}] {name}"})
+
+            self._search_cache.refresh(api_url, on_progress=on_progress)
+            models = self._search_cache.get_models()
+            self.root.after(0, lambda: self._on_search_load_complete(models, fetched[0]))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_search_load_complete(self, models: list, updated_count: int):
+        self._search_all_models = models
+        self._repopulate_tree(filter_models(models, self._build_search_filters()))
+        self._update_search_dropdowns()
+        self._on_search_filter_change()
+        self.append_log(
+            f"=== Search: catalog ready — {len(models)} models ({updated_count} refreshed) ==="
+        )
 
     def _build_update_tab(self, parent):
         parent.columnconfigure(0, weight=3)
