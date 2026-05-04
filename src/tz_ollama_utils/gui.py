@@ -171,6 +171,7 @@ class OllamaUtilsApp:
             padding=(12, 8),
         )
         style.configure("Quiet.TButton", padding=(10, 7))
+        style.configure("Search.TFrame", background=PANEL_BG)
         style.configure("App.TNotebook", background=APP_BG, borderwidth=0)
         style.configure(
             "App.TNotebook.Tab",
@@ -254,8 +255,142 @@ class OllamaUtilsApp:
     def _build_search_tab(self, parent):
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(1, weight=1)
-        placeholder = self.ttk.Label(parent, text="Search & Discover — loading...", style="Body.TLabel")
-        placeholder.grid(row=0, column=0, padx=18, pady=18)
+
+        # --- Filter bar ---
+        filter_bar = self.ttk.Frame(parent, style="Card.TFrame", padding=(12, 8))
+        filter_bar.grid(row=0, column=0, sticky="ew")
+
+        row0 = self.ttk.Frame(filter_bar, style="Card.TFrame")
+        row0.grid(row=0, column=0, sticky="ew")
+
+        col = 0
+        self.ttk.Label(row0, text="🔍", style="Body.TLabel").grid(row=0, column=col, padx=(0, 4))
+        col += 1
+
+        name_var = self.tk.StringVar()
+        self._search_filter_vars["name"] = name_var
+        name_entry = self.ttk.Entry(row0, textvariable=name_var, width=14)
+        name_entry.grid(row=0, column=col, padx=(0, 8))
+        name_entry.bind("<KeyRelease>", lambda e: self._on_search_filter_change())
+        col += 1
+
+        for label, key in [
+            ("Family", "family"),
+            ("Params", "parameter_size"),
+            ("Quant", "quantization_level"),
+            ("License", "license_short"),
+        ]:
+            self.ttk.Label(row0, text=label + ":", style="Body.TLabel").grid(row=0, column=col, padx=(4, 2))
+            col += 1
+            var = self.tk.StringVar(value="")
+            self._search_filter_vars[key] = var
+            cb = self.ttk.Combobox(row0, textvariable=var, width=10, state="readonly", values=["Any"])
+            cb.set("Any")
+            cb.grid(row=0, column=col, padx=(0, 6))
+            cb.bind("<<ComboboxSelected>>", lambda e, k=key: self._on_combobox_select(k))
+            self._search_comboboxes[key] = cb
+            col += 1
+
+        for label, key, opts in [
+            ("Max Size", "max_size_bytes", ["Any", "2 GiB", "4 GiB", "8 GiB", "16 GiB", "32 GiB"]),
+            ("Min Ctx", "min_context", ["Any", "2k", "4k", "8k", "32k", "128k"]),
+        ]:
+            self.ttk.Label(row0, text=label + ":", style="Body.TLabel").grid(row=0, column=col, padx=(4, 2))
+            col += 1
+            var = self.tk.StringVar(value="Any")
+            self._search_filter_vars[key] = var
+            cb = self.ttk.Combobox(row0, textvariable=var, width=8, state="readonly", values=opts)
+            cb.set("Any")
+            cb.grid(row=0, column=col, padx=(0, 6))
+            cb.bind("<<ComboboxSelected>>", lambda e, k=key: self._on_combobox_select(k))
+            col += 1
+
+        row1 = self.ttk.Frame(filter_bar, style="Card.TFrame")
+        row1.grid(row=1, column=0, pady=(6, 0), sticky="ew")
+
+        bcol = 0
+        for cap in ["completion", "tools", "embedding", "thinking", "vision"]:
+            var = self.tk.BooleanVar(value=False)
+            self._search_cap_vars[cap] = var
+            self.ttk.Checkbutton(
+                row1, text=cap, variable=var,
+                command=self._on_search_filter_change,
+                style="Toolbutton",
+            ).grid(row=0, column=bcol, padx=(0, 4))
+            bcol += 1
+
+        sys_var = self.tk.BooleanVar(value=False)
+        self._search_filter_vars["has_system_prompt"] = sys_var
+        self.ttk.Checkbutton(
+            row1, text="has system prompt", variable=sys_var,
+            command=self._on_search_filter_change,
+            style="Toolbutton",
+        ).grid(row=0, column=bcol, padx=(8, 4))
+        bcol += 1
+
+        self.ttk.Label(row1, text="Parent:", style="Body.TLabel").grid(row=0, column=bcol, padx=(8, 2))
+        bcol += 1
+        parent_var = self.tk.StringVar()
+        self._search_filter_vars["parent_model"] = parent_var
+        parent_entry = self.ttk.Entry(row1, textvariable=parent_var, width=12)
+        parent_entry.grid(row=0, column=bcol, padx=(0, 8))
+        parent_entry.bind("<KeyRelease>", lambda e: self._on_search_filter_change())
+        bcol += 1
+
+        self._search_count_var = self.tk.StringVar(value="")
+        self.ttk.Label(row1, textvariable=self._search_count_var, style="Body.TLabel").grid(
+            row=0, column=bcol, padx=(0, 8)
+        )
+        bcol += 1
+
+        self.ttk.Button(
+            row1, text="Clear", command=self._clear_search_filters, style="Quiet.TButton"
+        ).grid(row=0, column=bcol, padx=(0, 4))
+        bcol += 1
+        self.ttk.Button(
+            row1, text="⟳ Refresh", command=self._refresh_search_cache, style="Action.TButton"
+        ).grid(row=0, column=bcol)
+
+        # --- Split pane ---
+        split = self.ttk.Frame(parent, style="App.TFrame")
+        split.grid(row=1, column=0, sticky="nsew", padx=(0, 0))
+        split.columnconfigure(0, weight=2)
+        split.columnconfigure(1, weight=3)
+        split.rowconfigure(0, weight=1)
+        self._build_search_list(split)
+        self._build_search_detail(split)
+
+    def _on_combobox_select(self, key):
+        var = self._search_filter_vars.get(key)
+        if var and var.get() == "Any":
+            var.set("")
+        self._on_search_filter_change()
+
+    def _clear_search_filters(self):
+        for key, var in self._search_filter_vars.items():
+            if isinstance(var, self.tk.BooleanVar):
+                var.set(False)
+            else:
+                var.set("")
+        for var in self._search_cap_vars.values():
+            var.set(False)
+        for key, cb in self._search_comboboxes.items():
+            cb.set("Any")
+        self._on_search_filter_change()
+
+    def _refresh_search_cache(self):
+        self._search_cache.invalidate()
+        self._search_all_models = []
+        self._load_search_models()
+
+    def _on_search_filter_change(self):
+        pass  # implemented in Task 7
+
+    def _build_search_list(self, parent):
+        pass  # implemented in Task 7
+
+    def _build_search_detail(self, parent):
+        pass  # implemented in Task 8
 
     def _on_tab_changed(self, event):
         notebook = event.widget
