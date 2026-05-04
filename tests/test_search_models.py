@@ -182,3 +182,45 @@ def test_refresh_tolerates_show_fetch_error(tmp_path):
     models = cache.get_models()
     assert len(models) == 1
     assert models[0]["name"] == "bad:latest"
+    # show should be stored as None (sentinel for failed fetch, not empty dict)
+    assert cache._models["bad:latest"]["show"] is None
+
+    # On the next refresh with a working show endpoint, the model must be re-fetched
+    # because cached.get("show") is None triggers the staleness gate.
+    tags_resp2 = _mock_response({"models": [{"name": "bad:latest", "digest": "sha256:xyz", "size": 100}]})
+    show_resp2 = _mock_response({"details": {"family": "llama"}})
+    responses2 = iter([tags_resp2, show_resp2])
+    show_calls = [0]
+
+    def fake_urlopen2(req, timeout=None):
+        resp = next(responses2)
+        if hasattr(req, "data") and req.data:
+            show_calls[0] += 1
+        return resp
+
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=fake_urlopen2):
+        cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    assert show_calls[0] == 1, "show should be re-fetched when previously stored as None"
+    assert cache._models["bad:latest"]["show"] == {"details": {"family": "llama"}}
+
+
+def test_refresh_aborts_on_tags_fetch_error(tmp_path):
+    cache = ModelSearchCache()
+    cache._models = {"existing:latest": {"digest": "sha256:abc", "cached_at": "2026-01-01", "tags": {}, "show": {"details": {}}}}
+
+    save_calls = [0]
+    original_save = cache.save
+
+    def counting_save(*args, **kwargs):
+        save_calls[0] += 1
+        return original_save(*args, **kwargs)
+
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=OSError("network error")):
+        with patch.object(cache, "save", side_effect=counting_save):
+            cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    # Cache must not be wiped and save must not be called
+    assert len(cache.get_models()) == 1
+    assert cache.get_models()[0]["name"] == "existing:latest"
+    assert save_calls[0] == 0, "save should not be called when tags fetch fails"

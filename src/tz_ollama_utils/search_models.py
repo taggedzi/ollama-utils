@@ -57,6 +57,9 @@ class ModelSearchCache:
     def refresh(self, api_base_url: str, on_progress=None, cache_path: Path | None = None) -> None:
         self._api_base_url = api_base_url
         tags_data = self._fetch_tags(api_base_url)
+        if tags_data is None:
+            return
+
         current_names = {m["name"] for m in tags_data}
 
         for name in list(self._models.keys()):
@@ -67,7 +70,7 @@ class ModelSearchCache:
         for model_info in tags_data:
             name = model_info["name"]
             cached = self._models.get(name, {})
-            if cached.get("digest") != model_info.get("digest") or "show" not in cached:
+            if cached.get("digest") != model_info.get("digest") or cached.get("show") is None:
                 needs_show.append(model_info)
             else:
                 self._models[name]["tags"] = model_info
@@ -87,16 +90,16 @@ class ModelSearchCache:
 
         self.save(cache_path)
 
-    def _fetch_tags(self, api_base_url: str) -> list:
+    def _fetch_tags(self, api_base_url: str) -> list | None:
         url = f"{api_base_url.rstrip('/')}/tags"
         req = urllib_request.Request(url, method="GET")
         try:
             with urllib_request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read()).get("models", [])
         except (urllib_error.URLError, urllib_error.HTTPError, OSError, json.JSONDecodeError):
-            return []
+            return None
 
-    def _fetch_show(self, api_base_url: str, name: str) -> dict:
+    def _fetch_show(self, api_base_url: str, name: str) -> dict | None:
         url = f"{api_base_url.rstrip('/')}/show"
         body = json.dumps({"name": name}).encode("utf-8")
         req = urllib_request.Request(
@@ -107,7 +110,7 @@ class ModelSearchCache:
             with urllib_request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())
         except (urllib_error.URLError, urllib_error.HTTPError, OSError, json.JSONDecodeError):
-            return {}
+            return None
 
     def _normalize(self, name: str, entry: dict) -> dict:
         return {"name": name}  # stub — expanded in Task 3
