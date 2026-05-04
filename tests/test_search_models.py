@@ -1,6 +1,7 @@
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from tz_ollama_utils.search_models import ModelSearchCache
 
 
@@ -102,3 +103,82 @@ def test_update_model_show_persists(tmp_path):
     cache.update_model_show("m:latest", {"license": "MIT"}, cache_path=p)
     data = json.loads(p.read_text())
     assert data["models"]["m:latest"]["show"]["license"] == "MIT"
+
+
+def _mock_response(data: dict):
+    body = json.dumps(data).encode()
+    mock = MagicMock()
+    mock.read.return_value = body
+    mock.__enter__ = lambda s: s
+    mock.__exit__ = MagicMock(return_value=False)
+    return mock
+
+
+def test_refresh_fetches_tags_and_show(tmp_path):
+    tags_resp = _mock_response({"models": [{"name": "llama3.2:3b", "digest": "sha256:new", "size": 2000000000}]})
+    show_resp = _mock_response({"details": {"family": "llama"}, "license": "MIT"})
+    responses = iter([tags_resp, show_resp])
+
+    cache = ModelSearchCache()
+    progress = []
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=lambda r, timeout=None: next(responses)):
+        cache.refresh("http://localhost:11434/api", on_progress=lambda n, d, t: progress.append((n, d, t)), cache_path=tmp_path / "c.json")
+
+    models = cache.get_models()
+    assert len(models) == 1
+    assert models[0]["name"] == "llama3.2:3b"
+    assert progress == [("llama3.2:3b", 1, 1)]
+
+
+def test_refresh_skips_show_when_digest_unchanged(tmp_path):
+    cache = ModelSearchCache()
+    cache._models = {
+        "llama3.2:3b": {
+            "digest": "sha256:same",
+            "cached_at": "2026-01-01",
+            "tags": {"name": "llama3.2:3b", "size": 1},
+            "show": {"details": {"family": "llama"}},
+        }
+    }
+    tags_resp = _mock_response({"models": [{"name": "llama3.2:3b", "digest": "sha256:same", "size": 1}]})
+
+    show_calls = []
+    def fake_urlopen(req, timeout=None):
+        if hasattr(req, "data") and req.data:  # POST = /show call
+            show_calls.append(req.full_url)
+        return tags_resp
+
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=fake_urlopen):
+        cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    assert show_calls == []
+
+
+def test_refresh_removes_models_absent_from_api(tmp_path):
+    cache = ModelSearchCache()
+    cache._models = {"old:latest": {"digest": "x", "cached_at": "", "tags": {}, "show": {}}}
+    tags_resp = _mock_response({"models": []})
+
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", return_value=tags_resp):
+        cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    assert cache.get_models() == []
+
+
+def test_refresh_tolerates_show_fetch_error(tmp_path):
+    tags_resp = _mock_response({"models": [{"name": "bad:latest", "digest": "sha256:xyz", "size": 100}]})
+    call_count = [0]
+
+    def fake_urlopen(req, timeout=None):
+        if call_count[0] == 0:
+            call_count[0] += 1
+            return tags_resp
+        raise OSError("connection refused")
+
+    cache = ModelSearchCache()
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=fake_urlopen):
+        cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    models = cache.get_models()
+    assert len(models) == 1
+    assert models[0]["name"] == "bad:latest"
