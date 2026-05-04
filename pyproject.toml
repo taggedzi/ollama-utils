@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools==82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -32,7 +32,8 @@ Homepage = "https://github.com/taggedzi/tz-ollama-utils"
 
 [project.optional-dependencies]
 build = [
-  "pyinstaller>=6.0",
+  "cyclonedx-bom==7.3.0",
+  "pyinstaller==6.20.0",
 ]
 dev = [
   "pytest>=8.0",

@@ -8,6 +8,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
   build:
@@ -15,21 +18,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             artifact_name: tz-ollama-utils-linux
             binary_name: tz-ollama-utils
-          - os: windows-latest
+            release_asset: tz-ollama-utils-linux.tar.gz
+          - os: windows-2022
             artifact_name: tz-ollama-utils-windows
             binary_name: tz-ollama-utils.exe
+            release_asset: tz-ollama-utils-windows.zip
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.10"
 
@@ -40,7 +45,9 @@ jobs:
           sudo apt-get install -y python3-tk
 
       - name: Install build dependencies
-        run: python -m pip install --upgrade pip .[build]
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[build]
 
       - name: Verify tkinter support
         run: python -c "import tkinter"
@@ -60,24 +67,64 @@ jobs:
           cp "dist/${{ matrix.binary_name }}" release/
           cd release
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            powershell -Command "Compress-Archive -Path * -DestinationPath ../${{ matrix.artifact_name }}.zip"
+            powershell -Command "Compress-Archive -Path * -DestinationPath ../${{ matrix.release_asset }}"
           else
-            tar -czf "../${{ matrix.artifact_name }}.tar.gz" *
+            tar -czf "../${{ matrix.release_asset }}" *
           fi
 
+      - name: Generate SBOM
+        run: >
+          cyclonedx-py environment
+          --output-reproducible
+          --spec-version 1.6
+          --output-format JSON
+          --pyproject pyproject.toml
+          --output-file "${{ matrix.artifact_name }}.sbom.json"
+
+      - name: Generate release checksums
+        run: |
+          python - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+
+          files = [
+              Path("${{ matrix.release_asset }}"),
+              Path("${{ matrix.artifact_name }}.sbom.json"),
+          ]
+          output = Path("${{ matrix.artifact_name }}.sha256")
+
+          with output.open("w", encoding="utf-8", newline="\n") as handle:
+              for path in files:
+                  digest = sha256(path.read_bytes()).hexdigest()
+                  handle.write(f"{digest} *{path.name}\n")
+          PY
+
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: |
-            ${{ matrix.artifact_name }}.zip
-            ${{ matrix.artifact_name }}.tar.gz
-          if-no-files-found: ignore
+            ${{ matrix.release_asset }}
+            ${{ matrix.artifact_name }}.sbom.json
+            ${{ matrix.artifact_name }}.sha256
+          if-no-files-found: error
+
+      - name: Generate build provenance attestation
+        uses: actions/attest@v4.1.0
+        with:
+          subject-checksums: ${{ matrix.artifact_name }}.sha256
+
+      - name: Generate SBOM attestation
+        uses: actions/attest@v4.1.0
+        with:
+          subject-path: ${{ matrix.release_asset }}
+          sbom-path: ${{ matrix.artifact_name }}.sbom.json
 
       - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3.0.0
         with:
           files: |
-            ${{ matrix.artifact_name }}.zip
-            ${{ matrix.artifact_name }}.tar.gz
+            ${{ matrix.release_asset }}
+            ${{ matrix.artifact_name }}.sbom.json
+            ${{ matrix.artifact_name }}.sha256
