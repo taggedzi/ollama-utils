@@ -809,10 +809,22 @@ class OllamaUtilsApp:
                 else:
                     err = clean_text(result.stderr) or f"exit code {result.returncode}"
                     self.log_queue.put({"kind": "log", "message": f"Delete failed: {err}"})
-                    self.root.after(0, lambda: self._search_delete_btn and self._search_delete_btn.configure(state="normal"))
+                    def _reenable_delete_btn():
+                        try:
+                            if self._search_delete_btn:
+                                self._search_delete_btn.configure(state="normal")
+                        except self.tk.TclError:
+                            pass
+                    self.root.after(0, _reenable_delete_btn)
             except Exception as exc:
                 self.log_queue.put({"kind": "log", "message": f"Delete error: {exc}"})
-                self.root.after(0, lambda: self._search_delete_btn and self._search_delete_btn.configure(state="normal"))
+                def _reenable_delete_btn_err():
+                    try:
+                        if self._search_delete_btn:
+                            self._search_delete_btn.configure(state="normal")
+                    except self.tk.TclError:
+                        pass
+                self.root.after(0, _reenable_delete_btn_err)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -853,10 +865,22 @@ class OllamaUtilsApp:
                     self.root.after(0, lambda: self._after_search_update(name, updated))
                 else:
                     self.log_queue.put({"kind": "log", "message": f"Pull failed for {name} (exit code {proc.returncode})."})
-                    self.root.after(0, lambda: self._search_update_btn and self._search_update_btn.configure(state="normal"))
+                    def _reenable_update_btn():
+                        try:
+                            if self._search_update_btn:
+                                self._search_update_btn.configure(state="normal")
+                        except self.tk.TclError:
+                            pass
+                    self.root.after(0, _reenable_update_btn)
             except Exception as exc:
                 self.log_queue.put({"kind": "log", "message": f"Pull error: {exc}"})
-                self.root.after(0, lambda: self._search_update_btn and self._search_update_btn.configure(state="normal"))
+                def _reenable_update_btn_err():
+                    try:
+                        if self._search_update_btn:
+                            self._search_update_btn.configure(state="normal")
+                    except self.tk.TclError:
+                        pass
+                self.root.after(0, _reenable_update_btn_err)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -869,8 +893,11 @@ class OllamaUtilsApp:
         model = next((m for m in updated_models if m["name"] == name), None)
         if model:
             self._populate_detail_panel(model)
-        if self._search_update_btn:
-            self._search_update_btn.configure(state="normal")
+        try:
+            if self._search_update_btn:
+                self._search_update_btn.configure(state="normal")
+        except self.tk.TclError:
+            pass
 
     def _build_update_tab(self, parent):
         parent.columnconfigure(0, weight=3)

@@ -408,3 +408,20 @@ def test_filter_and_combination():
     result = filter_models(models, {"family": "llama", "capabilities": {"tools"}})
     assert len(result) == 1
     assert result[0]["family"] == "llama" and "tools" in result[0]["capabilities"]
+
+
+def test_fetch_show_uses_model_field_in_body(tmp_path):
+    captured_bodies = []
+
+    def fake_urlopen(req, timeout=None):
+        if req.data:
+            captured_bodies.append(json.loads(req.data))
+        return _mock_response({"details": {"family": "llama"}})
+
+    cache = ModelSearchCache()
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", side_effect=fake_urlopen):
+        cache._fetch_show("http://localhost:11434/api", "llama3.2:3b")
+
+    assert len(captured_bodies) == 1
+    assert captured_bodies[0] == {"model": "llama3.2:3b"}
+    assert "name" not in captured_bodies[0]

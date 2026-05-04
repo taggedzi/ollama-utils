@@ -104,7 +104,7 @@ class ModelSearchCache:
 
     def _fetch_show(self, api_base_url: str, name: str) -> dict | None:
         url = f"{api_base_url.rstrip('/')}/show"
-        body = json.dumps({"name": name}).encode("utf-8")
+        body = json.dumps({"model": name}).encode("utf-8")
         req = urllib_request.Request(
             url, data=body, method="POST",
             headers={"Content-Type": "application/json"},
