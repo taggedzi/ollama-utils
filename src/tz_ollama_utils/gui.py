@@ -756,6 +756,103 @@ class OllamaUtilsApp:
             f"=== Search: catalog ready — {len(models)} models ({updated_count} refreshed) ==="
         )
 
+    def _search_copy_name(self, name: str):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(name)
+        self.append_log(f"Copied to clipboard: {name}")
+
+    def _search_delete_model(self, name: str):
+        confirmed = _mb.askyesno(
+            "Delete Model",
+            f"Delete '{name}'?\n\nThis removes the model from Ollama and cannot be undone.",
+            icon="warning",
+            parent=self.root,
+        )
+        if not confirmed:
+            return
+
+        self.append_log(f"=== Deleting {name} ===")
+        if self._search_delete_btn:
+            self._search_delete_btn.configure(state="disabled")
+
+        def worker():
+            import subprocess as _sp
+            try:
+                result = _sp.run(
+                    tool_command("ollama", "rm", name),
+                    capture_output=True, text=True,
+                    encoding="utf-8", errors="replace",
+                    timeout=30,
+                    **subprocess_window_kwargs(),
+                )
+                if result.returncode == 0:
+                    self.log_queue.put({"kind": "log", "message": f"Deleted {name} successfully."})
+                    self.root.after(0, lambda: self._after_search_delete(name))
+                else:
+                    err = clean_text(result.stderr) or f"exit code {result.returncode}"
+                    self.log_queue.put({"kind": "log", "message": f"Delete failed: {err}"})
+                    self.root.after(0, lambda: self._search_delete_btn and self._search_delete_btn.configure(state="normal"))
+            except Exception as exc:
+                self.log_queue.put({"kind": "log", "message": f"Delete error: {exc}"})
+                self.root.after(0, lambda: self._search_delete_btn and self._search_delete_btn.configure(state="normal"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _after_search_delete(self, name: str):
+        self._search_cache.remove_model(name)
+        self._search_all_models = self._search_cache.get_models()
+        filtered = filter_models(self._search_all_models, self._build_search_filters())
+        self._repopulate_tree(filtered)
+        if self._search_count_var:
+            self._search_count_var.set(f"Showing {len(filtered)} of {len(self._search_all_models)}")
+        self._clear_detail_panel()
+
+    def _search_update_model(self, name: str):
+        self.append_log(f"=== Pulling update for {name} ===")
+        if self._search_update_btn:
+            self._search_update_btn.configure(state="disabled")
+
+        def worker():
+            import subprocess as _sp
+            try:
+                proc = _sp.Popen(
+                    tool_command("ollama", "pull", name),
+                    stdout=_sp.PIPE, stderr=_sp.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    **subprocess_window_kwargs(),
+                )
+                for line in proc.stdout:
+                    cleaned = clean_text(line)
+                    if cleaned:
+                        self.log_queue.put({"kind": "log", "message": cleaned})
+                proc.wait()
+                if proc.returncode == 0:
+                    self.log_queue.put({"kind": "log", "message": f"Pull complete for {name}."})
+                    api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
+                    self._search_cache.refresh(api_url)
+                    updated = self._search_cache.get_models()
+                    self.root.after(0, lambda: self._after_search_update(name, updated))
+                else:
+                    self.log_queue.put({"kind": "log", "message": f"Pull failed for {name} (exit code {proc.returncode})."})
+                    self.root.after(0, lambda: self._search_update_btn and self._search_update_btn.configure(state="normal"))
+            except Exception as exc:
+                self.log_queue.put({"kind": "log", "message": f"Pull error: {exc}"})
+                self.root.after(0, lambda: self._search_update_btn and self._search_update_btn.configure(state="normal"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _after_search_update(self, name: str, updated_models: list):
+        self._search_all_models = updated_models
+        filtered = filter_models(updated_models, self._build_search_filters())
+        self._repopulate_tree(filtered)
+        if self._search_count_var:
+            self._search_count_var.set(f"Showing {len(filtered)} of {len(updated_models)}")
+        model = next((m for m in updated_models if m["name"] == name), None)
+        if model:
+            self._populate_detail_panel(model)
+        if self._search_update_btn:
+            self._search_update_btn.configure(state="normal")
+
     def _build_update_tab(self, parent):
         parent.columnconfigure(0, weight=3)
         parent.columnconfigure(1, weight=2)
