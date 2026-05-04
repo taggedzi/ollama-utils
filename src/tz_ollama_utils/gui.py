@@ -455,7 +455,7 @@ class OllamaUtilsApp:
                     model.get("size_human") or "",
                     caps,
                 ))
-            except Exception:
+            except self.tk.TclError:
                 pass
 
     def _on_model_select(self, event):
@@ -754,9 +754,13 @@ class OllamaUtilsApp:
                 fetched[0] = done
                 self.log_queue.put({"kind": "log", "message": f"  [{done}/{total}] {name}"})
 
-            self._search_cache.refresh(api_url, on_progress=on_progress)
-            models = self._search_cache.get_models()
-            self.root.after(0, lambda: self._on_search_load_complete(models, fetched[0]))
+            try:
+                self._search_cache.refresh(api_url, on_progress=on_progress)
+                models = self._search_cache.get_models()
+                self.root.after(0, lambda: self._on_search_load_complete(models, fetched[0]))
+            except Exception as exc:
+                self.log_queue.put({"kind": "log", "message": f"Search load error: {exc}"})
+                self.root.after(0, lambda: setattr(self, '_search_loading', False))
 
         threading.Thread(target=worker, daemon=True).start()
 
