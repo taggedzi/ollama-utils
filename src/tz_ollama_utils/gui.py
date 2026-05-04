@@ -11,6 +11,9 @@ from .test_models import OLLAMA_API_BASE_URL
 from .test_models import normalize_ollama_api_base_url
 from .test_models import main as test_main
 from .update_models import main as update_main
+import tkinter.messagebox as _mb
+from .common import clean_text, subprocess_window_kwargs, tool_command
+from .search_models import ModelSearchCache, filter_models
 
 APP_BG = "#F4EFE6"
 PANEL_BG = "#FBF7F1"
@@ -93,6 +96,24 @@ class OllamaUtilsApp:
             value=f"App v{__version__} | Ollama version: detecting..."
         )
         self.about_window = None
+        self._search_cache = ModelSearchCache()
+        self._search_all_models: list = []
+        self._search_filter_vars: dict = {}
+        self._search_cap_vars: dict = {}
+        self._search_comboboxes: dict = {}
+        self._search_tree = None
+        self._search_count_var = None
+        self._search_detail_frame = None
+        self._search_selected_model: dict | None = None
+        self._search_update_btn = None
+        self._search_delete_btn = None
+        self._search_copy_btn = None
+        self._search_params_visible = False
+        self._search_params_text = None
+        self._search_params_toggle_btn = None
+        self._detail_canvas = None
+        self._detail_vsb = None
+        self._detail_placeholder = None
         self.window_icon = None
         self.header_logo = None
 
@@ -219,12 +240,30 @@ class OllamaUtilsApp:
 
         update_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=18)
         test_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=18)
+        search_tab = self.ttk.Frame(notebook, style="Card.TFrame", padding=0)
 
         notebook.add(update_tab, text="Update")
         notebook.add(test_tab, text="Test & Report")
+        notebook.add(search_tab, text="Search & Discover")
 
         self._build_update_tab(update_tab)
         self._build_test_tab(test_tab)
+        self._build_search_tab(search_tab)
+        notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
+    def _build_search_tab(self, parent):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(1, weight=1)
+        placeholder = self.ttk.Label(parent, text="Search & Discover — loading...", style="Body.TLabel")
+        placeholder.grid(row=0, column=0, padx=18, pady=18)
+
+    def _on_tab_changed(self, event):
+        notebook = event.widget
+        if notebook.index(notebook.select()) == 2:
+            self._load_search_models()
+
+    def _load_search_models(self):
+        pass
 
     def _build_update_tab(self, parent):
         parent.columnconfigure(0, weight=3)
