@@ -224,3 +224,90 @@ def test_refresh_aborts_on_tags_fetch_error(tmp_path):
     assert len(cache.get_models()) == 1
     assert cache.get_models()[0]["name"] == "existing:latest"
     assert save_calls[0] == 0, "save should not be called when tags fetch fails"
+
+
+def _cache_with(tags, show):
+    cache = ModelSearchCache()
+    cache._models = {
+        "test:latest": {"digest": tags.get("digest", ""), "cached_at": "2026-01-01", "tags": tags, "show": show}
+    }
+    return cache.get_models()[0]
+
+
+def test_normalize_name():
+    m = _cache_with({"name": "test:latest"}, {})
+    assert m["name"] == "test:latest"
+
+
+def test_normalize_family_and_params():
+    m = _cache_with({}, {"details": {"family": "llama", "parameter_size": "3.6B", "quantization_level": "Q4_K_M", "format": "gguf"}})
+    assert m["family"] == "llama"
+    assert m["parameter_size"] == "3.6B"
+    assert m["quantization_level"] == "Q4_K_M"
+    assert m["format"] == "gguf"
+
+
+def test_normalize_size_bytes_and_human():
+    m = _cache_with({"size": 2000000000}, {})
+    assert m["size_bytes"] == 2000000000
+    assert m["size_human"] == "1.86 GiB"
+
+
+def test_normalize_capabilities():
+    m = _cache_with({}, {"details": {"capabilities": ["completion", "tools"]}})
+    assert m["capabilities"] == ["completion", "tools"]
+
+
+def test_normalize_capabilities_empty_when_missing():
+    m = _cache_with({}, {})
+    assert m["capabilities"] == []
+
+
+def test_normalize_context_window_from_modelinfo():
+    m = _cache_with({}, {"modelinfo": {"llm.context_length": 131072}})
+    assert m["context_window"] == 131072
+
+
+def test_normalize_context_window_none_when_missing():
+    m = _cache_with({}, {})
+    assert m["context_window"] is None
+
+
+def test_normalize_license_short_is_first_line():
+    m = _cache_with({}, {"license": "MIT License\n\nCopyright (c) 2024..."})
+    assert m["license_short"] == "MIT License"
+    assert m["license_full"] == "MIT License\n\nCopyright (c) 2024..."
+
+
+def test_normalize_license_none_when_empty():
+    m = _cache_with({}, {})
+    assert m["license_short"] is None
+    assert m["license_full"] is None
+
+
+def test_normalize_system_prompt():
+    m = _cache_with({}, {"system": "You are helpful."})
+    assert m["system_prompt"] == "You are helpful."
+
+
+def test_normalize_system_prompt_none_when_missing():
+    m = _cache_with({}, {})
+    assert m["system_prompt"] is None
+
+
+def test_normalize_parent_model():
+    m = _cache_with({}, {"details": {"parent_model": "llama3.2"}})
+    assert m["parent_model"] == "llama3.2"
+
+
+def test_normalize_digest_from_tags():
+    m = _cache_with({"digest": "sha256:abc"}, {})
+    assert m["digest"] == "sha256:abc"
+
+
+def test_normalize_handles_fully_empty_show():
+    m = _cache_with({"name": "x:latest", "size": 0}, {})
+    assert m["name"] == "test:latest"
+    assert m["family"] is None
+    assert m["capabilities"] == []
+    assert m["size_bytes"] == 0

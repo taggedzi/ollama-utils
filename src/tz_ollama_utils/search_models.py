@@ -113,7 +113,48 @@ class ModelSearchCache:
             return None
 
     def _normalize(self, name: str, entry: dict) -> dict:
-        return {"name": name}  # stub — expanded in Task 3
+        tags = entry.get("tags") or {}
+        show = entry.get("show") or {}
+        details = show.get("details") or tags.get("details") or {}
+        modelinfo = show.get("modelinfo") or {}
+
+        context_window = None
+        ctx_raw = modelinfo.get("llm.context_length") or modelinfo.get("context_length")
+        if ctx_raw is not None:
+            try:
+                context_window = int(ctx_raw)
+            except (ValueError, TypeError):
+                pass
+
+        license_full = show.get("license") or None
+        license_short = None
+        if license_full:
+            first_line = license_full.split("\n")[0].strip()
+            license_short = first_line[:80] if first_line else None
+
+        size_bytes = tags.get("size")
+
+        return {
+            "name": name,
+            "family": details.get("family"),
+            "families": details.get("families") or [],
+            "capabilities": details.get("capabilities") or [],
+            "parameter_size": details.get("parameter_size"),
+            "quantization_level": details.get("quantization_level"),
+            "format": details.get("format"),
+            "size_bytes": size_bytes,
+            "size_human": format_bytes(size_bytes),
+            "modified_at": tags.get("modified_at"),
+            "digest": tags.get("digest") or entry.get("digest", ""),
+            "context_window": context_window,
+            "license_full": license_full,
+            "license_short": license_short,
+            "system_prompt": show.get("system") or None,
+            "template": show.get("template") or None,
+            "parent_model": details.get("parent_model") or None,
+            "parameters": show.get("parameters") or None,
+            "modelinfo": modelinfo,
+        }
 
 
 def filter_models(models: list, filters: dict) -> list:
