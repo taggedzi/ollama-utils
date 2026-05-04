@@ -4,12 +4,14 @@ import sys
 import threading
 import webbrowser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import __version__
 from .common import detect_ollama_version
+from .common import is_loopback_host
+from .common import normalize_ollama_api_base_url
 from .test_models import DEFAULT_REPORT_PATH
 from .test_models import OLLAMA_API_BASE_URL
-from .test_models import normalize_ollama_api_base_url
 from .test_models import main as test_main
 from .update_models import main as update_main
 import tkinter.messagebox as _mb
@@ -78,6 +80,7 @@ class OllamaUtilsApp:
         self.filedialog = _fd
         self.root = root
         self.root.title("Taggedz's Ollama Utilities")
+        self._approved_remote_api_urls = set()
         self.root.geometry("1040x780")
         self.root.minsize(900, 640)
         self.root.configure(bg=APP_BG)
@@ -818,7 +821,11 @@ class OllamaUtilsApp:
             if self._search_count_var:
                 self._search_count_var.set(f"Showing {len(cached)} of {len(cached)}")
 
-        api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
+        api_url, api_url_error = self._resolve_api_base_url(require_confirmation=True)
+        if api_url_error:
+            self.append_log(api_url_error)
+            self._search_loading = False
+            return
         prefix = "Updating" if cached else "Loading"
         self.append_log(f"=== Search: {prefix} model catalog from {api_url} ===")
 
@@ -917,7 +924,12 @@ class OllamaUtilsApp:
         if self._search_update_btn:
             self._search_update_btn.configure(state="disabled")
 
-        api_url = self._selected_api_base_url()[0] or "http://127.0.0.1:11434/api"
+        api_url, api_url_error = self._resolve_api_base_url(require_confirmation=True)
+        if api_url_error:
+            self.append_log(api_url_error)
+            if self._search_update_btn:
+                self._search_update_btn.configure(state="normal")
+            return
 
         def worker():
             import subprocess as _sp
@@ -1449,11 +1461,40 @@ class OllamaUtilsApp:
 
         return str(Path(report_path).expanduser()), None
 
-    def _selected_api_base_url(self):
+    def _selected_api_base_url(self, allow_remote=False):
         try:
-            return normalize_ollama_api_base_url(self.api_base_url_var.get()), None
+            return normalize_ollama_api_base_url(
+                self.api_base_url_var.get(), allow_remote=allow_remote
+            ), None
         except ValueError as exc:
             return None, str(exc)
+
+    def _resolve_api_base_url(self, require_confirmation=False):
+        api_base_url, api_base_url_error = self._selected_api_base_url()
+        if api_base_url is not None:
+            return api_base_url, None
+
+        if not require_confirmation or "--allow-remote" not in (api_base_url_error or ""):
+            return None, api_base_url_error
+
+        candidate, candidate_error = self._selected_api_base_url(allow_remote=True)
+        if candidate_error:
+            return None, candidate_error
+        if candidate in self._approved_remote_api_urls:
+            return candidate, None
+
+        confirmed = _mb.askyesno(
+            "Allow Remote Ollama API",
+            "This API URL points to a non-local host. Remote hosts can see prompts and "
+            "returned model metadata.\n\nOnly continue if you trust this server.",
+            icon="warning",
+            parent=self.root,
+        )
+        if not confirmed:
+            return None, "Remote Ollama API URL was not approved."
+
+        self._approved_remote_api_urls.add(candidate)
+        return candidate, None
 
     def run_update(self):
         self._run_worker(
@@ -1502,7 +1543,7 @@ class OllamaUtilsApp:
             self.status_var.set("Invalid report path")
             return
 
-        api_base_url, api_base_url_error = self._selected_api_base_url()
+        api_base_url, api_base_url_error = self._resolve_api_base_url(require_confirmation=True)
         if api_base_url_error:
             self.append_log(api_base_url_error)
             self.status_var.set("Invalid API URL")
@@ -1513,6 +1554,8 @@ class OllamaUtilsApp:
             argv.append("--ignore-size")
         if vram_override is not None:
             argv.extend(["--vram-mib", str(vram_override)])
+        if not is_loopback_host(urlsplit(api_base_url).hostname):
+            argv.append("--allow-remote")
         argv.extend(["--api-base-url", api_base_url])
         argv.extend(["--report-path", report_path])
 

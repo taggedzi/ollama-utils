@@ -10,6 +10,9 @@ from urllib import request as urllib_request
 from .common import clean_text
 from .common import default_emit
 from .common import format_bytes
+from .common import normalize_ollama_api_base_url
+from .common import read_response_text_limited
+from .common import ResponseTooLargeError
 from .common import StopRequested
 from .common import subprocess_window_kwargs
 from .common import timestamp_now
@@ -57,16 +60,6 @@ def run_cmd(args, timeout, input_text=None):
         **subprocess_window_kwargs(),
     )
 
-
-def normalize_ollama_api_base_url(value):
-    cleaned = (value or "").strip().rstrip("/")
-    if not cleaned:
-        raise ValueError("Ollama API base URL is required.")
-    if cleaned.endswith("/api"):
-        return cleaned
-    return f"{cleaned}/api"
-
-
 def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT_SECONDS):
     url = f"{api_base_url}{path}"
     body = None
@@ -80,11 +73,18 @@ def run_ollama_api(method, path, api_base_url, payload=None, timeout=API_TIMEOUT
 
     try:
         with urllib_request.urlopen(request, timeout=timeout) as response:
-            raw_body = response.read().decode("utf-8", errors="replace")
+            raw_body = read_response_text_limited(response)
     except urllib_error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
+        try:
+            error_body = read_response_text_limited(exc)
+        except ResponseTooLargeError as size_exc:
+            raise RuntimeError(
+                f"Ollama API {method} {path} returned too much data: {size_exc}"
+            ) from exc
         cleaned = clean_text(error_body) or f"HTTP {exc.code}"
         raise RuntimeError(f"Ollama API {method} {path} failed: {cleaned}") from exc
+    except ResponseTooLargeError as exc:
+        raise RuntimeError(f"Ollama API {method} {path} returned too much data: {exc}") from exc
     except urllib_error.URLError as exc:
         reason = clean_text(str(exc.reason)) or str(exc.reason)
         raise RuntimeError(f"Unable to reach Ollama API {method} {path}: {reason}") from exc
@@ -166,6 +166,11 @@ def parse_args(argv):
             f"an explicit /api path. Default: {OLLAMA_API_BASE_URL}."
         ),
     )
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help="Allow non-loopback Ollama API hosts. Remote hosts must use https.",
+    )
 
     args = parser.parse_args(argv[1:])
 
@@ -177,7 +182,9 @@ def parse_args(argv):
         raise ValueError("VRAM MiB override must be a positive integer.")
     if args.vram_bytes is not None and args.vram_mib is not None:
         raise ValueError("Use either --vram-bytes or --vram-mib, not both.")
-    args.api_base_url = normalize_ollama_api_base_url(args.api_base_url)
+    args.api_base_url = normalize_ollama_api_base_url(
+        args.api_base_url, allow_remote=args.allow_remote
+    )
 
     return args
 

@@ -5,6 +5,7 @@ from tz_ollama_utils.test_models import (
     model_supports_embeddings,
     normalize_ollama_api_base_url,
     parse_parameters_text,
+    parse_args,
 )
 
 
@@ -39,6 +40,17 @@ def test_normalize_trailing_slash_stripped():
 
 def test_normalize_strips_whitespace():
     assert normalize_ollama_api_base_url("  http://127.0.0.1:11434  ") == "http://127.0.0.1:11434/api"
+
+
+def test_normalize_rejects_remote_without_opt_in():
+    with pytest.raises(ValueError, match="--allow-remote"):
+        normalize_ollama_api_base_url("https://example.com:11434")
+
+
+def test_parse_args_accepts_secure_remote_with_allow_remote():
+    args = parse_args(["tz-ollama-utils-test", "--allow-remote", "--api-base-url", "https://example.com:11434"])
+    assert args.allow_remote is True
+    assert args.api_base_url == "https://example.com:11434/api"
 
 
 # --- parse_parameters_text ---

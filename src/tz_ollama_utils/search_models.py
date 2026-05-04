@@ -6,6 +6,8 @@ from urllib import request as urllib_request
 from urllib import error as urllib_error
 
 from .common import format_bytes
+from .common import read_response_text_limited
+from .common import ResponseTooLargeError
 
 
 class ModelSearchCache:
@@ -98,8 +100,14 @@ class ModelSearchCache:
         req = urllib_request.Request(url, method="GET")
         try:
             with urllib_request.urlopen(req, timeout=10) as resp:
-                return json.loads(resp.read()).get("models", [])
-        except (urllib_error.URLError, urllib_error.HTTPError, OSError, json.JSONDecodeError):
+                return json.loads(read_response_text_limited(resp)).get("models", [])
+        except (
+            urllib_error.URLError,
+            urllib_error.HTTPError,
+            OSError,
+            json.JSONDecodeError,
+            ResponseTooLargeError,
+        ):
             return None
 
     def _fetch_show(self, api_base_url: str, name: str) -> dict | None:
@@ -111,8 +119,14 @@ class ModelSearchCache:
         )
         try:
             with urllib_request.urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read())
-        except (urllib_error.URLError, urllib_error.HTTPError, OSError, json.JSONDecodeError):
+                return json.loads(read_response_text_limited(resp))
+        except (
+            urllib_error.URLError,
+            urllib_error.HTTPError,
+            OSError,
+            json.JSONDecodeError,
+            ResponseTooLargeError,
+        ):
             return None
 
     def _normalize(self, name: str, entry: dict) -> dict:

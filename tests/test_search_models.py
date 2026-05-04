@@ -107,8 +107,22 @@ def test_update_model_show_persists(tmp_path):
 
 def _mock_response(data: dict):
     body = json.dumps(data).encode()
+    return _mock_bytes_response(body)
+
+
+def _mock_bytes_response(body: bytes):
     mock = MagicMock()
-    mock.read.return_value = body
+    mock.headers = {}
+    offset = {"value": 0}
+
+    def _read(amount=-1):
+        if amount < 0:
+            amount = len(body) - offset["value"]
+        chunk = body[offset["value"]:offset["value"] + amount]
+        offset["value"] += len(chunk)
+        return chunk
+
+    mock.read.side_effect = _read
     mock.__enter__ = lambda s: s
     mock.__exit__ = MagicMock(return_value=False)
     return mock
@@ -224,6 +238,25 @@ def test_refresh_aborts_on_tags_fetch_error(tmp_path):
     assert len(cache.get_models()) == 1
     assert cache.get_models()[0]["name"] == "existing:latest"
     assert save_calls[0] == 0, "save should not be called when tags fetch fails"
+
+
+def test_refresh_aborts_on_oversized_tags_response(tmp_path):
+    response = _mock_bytes_response(b"x" * (4 * 1024 * 1024 + 1))
+
+    cache = ModelSearchCache()
+    cache._models = {
+        "existing:latest": {
+            "digest": "sha256:abc",
+            "cached_at": "2026-01-01",
+            "tags": {},
+            "show": {"details": {}},
+        }
+    }
+
+    with patch("tz_ollama_utils.search_models.urllib_request.urlopen", return_value=response):
+        cache.refresh("http://localhost:11434/api", cache_path=tmp_path / "c.json")
+
+    assert cache.get_models()[0]["name"] == "existing:latest"
 
 
 def _cache_with(tags, show):

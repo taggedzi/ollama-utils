@@ -3,8 +3,10 @@ import re
 import shutil
 import subprocess
 import sys
+from ipaddress import ip_address
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
 
 
 class StopRequested(Exception):
@@ -15,6 +17,11 @@ OUTPUT_PREVIEW_LIMIT = 500
 TEXT_FIELD_PREVIEW_LIMIT = 2000
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 SPINNER_GLYPH_RE = re.compile(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]")
+MAX_HTTP_RESPONSE_BYTES = 4 * 1024 * 1024
+
+
+class ResponseTooLargeError(ValueError):
+    pass
 
 
 def timestamp_now():
@@ -196,3 +203,69 @@ def tool_command(tool_name, *args):
 
 def default_emit(message):
     print(message, flush=True)
+
+
+def is_loopback_host(hostname):
+    if not hostname:
+        return False
+
+    normalized = hostname.rstrip(".").lower()
+    if normalized == "localhost":
+        return True
+
+    try:
+        return ip_address(normalized).is_loopback
+    except ValueError:
+        return False
+
+
+def normalize_ollama_api_base_url(value, allow_remote=False):
+    cleaned = (value or "").strip().rstrip("/")
+    if not cleaned:
+        raise ValueError("Ollama API base URL is required.")
+    if not cleaned.endswith("/api"):
+        cleaned = f"{cleaned}/api"
+
+    parsed = urlsplit(cleaned)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Ollama API base URL must use http or https.")
+    if parsed.username or parsed.password:
+        raise ValueError("Ollama API base URL must not include credentials.")
+    if not parsed.hostname:
+        raise ValueError("Ollama API base URL must include a hostname.")
+
+    is_local = is_loopback_host(parsed.hostname)
+    if not is_local and not allow_remote:
+        raise ValueError(
+            "Remote Ollama API hosts are blocked by default. Re-run with --allow-remote "
+            "or confirm the remote host in the GUI."
+        )
+    if not is_local and parsed.scheme != "https":
+        raise ValueError("Remote Ollama API base URLs must use https.")
+
+    normalized = parsed._replace(query="", fragment="")
+    return urlunsplit(normalized)
+
+
+def read_response_text_limited(response, limit=MAX_HTTP_RESPONSE_BYTES):
+    content_length = response.headers.get("Content-Length")
+    if content_length:
+        try:
+            parsed_length = int(content_length)
+        except (TypeError, ValueError):
+            parsed_length = None
+        if parsed_length is not None and parsed_length > limit:
+            raise ResponseTooLargeError(f"HTTP response body exceeds {limit} bytes.")
+
+    chunks = []
+    total = 0
+    while True:
+        chunk = response.read(min(65536, limit - total + 1))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ResponseTooLargeError(f"HTTP response body exceeds {limit} bytes.")
+        chunks.append(chunk)
+
+    return b"".join(chunks).decode("utf-8", errors="replace")

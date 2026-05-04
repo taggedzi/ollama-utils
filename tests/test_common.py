@@ -1,8 +1,11 @@
 import pytest
 
 from tz_ollama_utils.common import (
+    ResponseTooLargeError,
     clean_text,
     format_bytes,
+    normalize_ollama_api_base_url,
+    read_response_text_limited,
     truncate_text,
     truncate_with_metadata,
     yaml_dump_lines,
@@ -69,6 +72,63 @@ def test_clean_text_removes_blank_lines():
 
 def test_clean_text_cr_becomes_lf():
     assert clean_text("hello\r\nworld") == "hello\nworld"
+
+
+# --- normalize_ollama_api_base_url ---
+
+def test_normalize_ollama_api_base_url_rejects_credentials():
+    with pytest.raises(ValueError, match="must not include credentials"):
+        normalize_ollama_api_base_url("http://user:pass@127.0.0.1:11434")
+
+
+def test_normalize_ollama_api_base_url_rejects_remote_without_opt_in():
+    with pytest.raises(ValueError, match="--allow-remote"):
+        normalize_ollama_api_base_url("https://example.com:11434")
+
+
+def test_normalize_ollama_api_base_url_rejects_insecure_remote():
+    with pytest.raises(ValueError, match="must use https"):
+        normalize_ollama_api_base_url("http://example.com:11434", allow_remote=True)
+
+
+def test_normalize_ollama_api_base_url_accepts_secure_remote_with_opt_in():
+    assert (
+        normalize_ollama_api_base_url("https://example.com:11434", allow_remote=True)
+        == "https://example.com:11434/api"
+    )
+
+
+# --- read_response_text_limited ---
+
+class _FakeResponse:
+    def __init__(self, body, headers=None):
+        self._body = body
+        self._offset = 0
+        self.headers = headers or {}
+
+    def read(self, amount=-1):
+        if amount < 0:
+            amount = len(self._body) - self._offset
+        chunk = self._body[self._offset:self._offset + amount]
+        self._offset += len(chunk)
+        return chunk
+
+
+def test_read_response_text_limited_reads_body():
+    response = _FakeResponse(b'{"ok": true}', headers={"Content-Length": "12"})
+    assert read_response_text_limited(response, limit=32) == '{"ok": true}'
+
+
+def test_read_response_text_limited_rejects_large_content_length():
+    response = _FakeResponse(b"", headers={"Content-Length": "33"})
+    with pytest.raises(ResponseTooLargeError):
+        read_response_text_limited(response, limit=32)
+
+
+def test_read_response_text_limited_rejects_large_stream_without_length():
+    response = _FakeResponse(b"a" * 33)
+    with pytest.raises(ResponseTooLargeError):
+        read_response_text_limited(response, limit=32)
 
 
 # --- truncate_text ---
