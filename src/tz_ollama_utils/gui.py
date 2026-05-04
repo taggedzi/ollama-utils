@@ -172,6 +172,24 @@ class OllamaUtilsApp:
         )
         style.configure("Quiet.TButton", padding=(10, 7))
         style.configure("Search.TFrame", background=PANEL_BG)
+        style.configure(
+            "DetailTitle.TLabel",
+            background=PANEL_BG,
+            foreground=TEXT_DARK,
+            font=("Segoe UI", 13, "bold"),
+        )
+        style.configure(
+            "FieldKey.TLabel",
+            background=PANEL_BG,
+            foreground=TEXT_MUTED,
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "FieldVal.TLabel",
+            background=PANEL_BG,
+            foreground=TEXT_DARK,
+            font=("Segoe UI", 9),
+        )
         style.configure("App.TNotebook", background=APP_BG, borderwidth=0)
         style.configure(
             "App.TNotebook.Tab",
@@ -498,13 +516,200 @@ class OllamaUtilsApp:
                 cb["values"] = ["Any"] + values
 
     def _populate_detail_panel(self, model: dict):
-        pass  # implemented in Task 8
+        self._detail_placeholder.grid_remove()
+        self._detail_canvas.grid()
+        self._detail_vsb.grid()
+
+        frame = self._search_detail_frame
+        for widget in frame.winfo_children():
+            widget.destroy()
+        frame.columnconfigure(0, weight=1)
+        self._search_params_visible = False
+
+        row = 0
+
+        # Header: name + badges + action buttons
+        header = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 12, 14, 8))
+        header.grid(row=row, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        row += 1
+
+        self.ttk.Label(header, text=model["name"], style="DetailTitle.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+
+        badges = self.ttk.Frame(header, style="Card.TFrame")
+        badges.grid(row=1, column=0, pady=(4, 0), sticky="w")
+        for cap in (model.get("capabilities") or []):
+            lbl = self.tk.Label(badges, text=cap, bg=ACCENT, fg="#FFF7EF",
+                                font=("Segoe UI", 8, "bold"), padx=4, pady=2)
+            lbl.pack(side="left", padx=(0, 4))
+
+        btns = self.ttk.Frame(header, style="Card.TFrame")
+        btns.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 0))
+
+        model_name = model["name"]
+        self._search_copy_btn = self.ttk.Button(
+            btns, text="📋 Copy", style="Quiet.TButton",
+            command=lambda: self._search_copy_name(model_name),
+        )
+        self._search_copy_btn.pack(side="left", padx=(0, 4))
+
+        self._search_update_btn = self.ttk.Button(
+            btns, text="⬆ Update", style="Quiet.TButton",
+            command=lambda: self._search_update_model(model_name),
+        )
+        self._search_update_btn.pack(side="left", padx=(0, 4))
+
+        self._search_delete_btn = self.ttk.Button(
+            btns, text="🗑 Delete", style="Quiet.TButton",
+            command=lambda: self._search_delete_model(model_name),
+        )
+        self._search_delete_btn.pack(side="left")
+
+        # Separator
+        self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
+        row += 1
+
+        # Metrics grid
+        metrics = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 10))
+        metrics.grid(row=row, column=0, sticky="ew")
+        row += 1
+
+        ctx = model.get("context_window")
+        fields = [
+            ("Family", model.get("family") or "—"),
+            ("Parameters", model.get("parameter_size") or "—"),
+            ("Quantization", model.get("quantization_level") or "—"),
+            ("Format", model.get("format") or "—"),
+            ("Size", model.get("size_human") or "—"),
+            ("Context", f"{ctx:,}" if ctx else "—"),
+            ("License", model.get("license_short") or "—"),
+            ("Modified", (model.get("modified_at") or "")[:10] or "—"),
+        ]
+        for i, (key, val) in enumerate(fields):
+            c = (i % 2) * 2
+            r = i // 2
+            self.ttk.Label(metrics, text=key, style="FieldKey.TLabel").grid(
+                row=r, column=c, padx=(0, 6), pady=2, sticky="w"
+            )
+            self.ttk.Label(metrics, text=val, style="FieldVal.TLabel").grid(
+                row=r, column=c + 1, padx=(0, 20), pady=2, sticky="w"
+            )
+
+        # System prompt
+        system_prompt = model.get("system_prompt")
+        if system_prompt:
+            self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
+            row += 1
+            sp = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 8))
+            sp.grid(row=row, column=0, sticky="ew")
+            sp.columnconfigure(0, weight=1)
+            row += 1
+            self.ttk.Label(sp, text="SYSTEM PROMPT", style="FieldKey.TLabel").grid(row=0, column=0, sticky="w")
+            t = self.tk.Text(sp, height=4, wrap="word", bg=PANEL_BG, fg=TEXT_DARK,
+                             relief="flat", bd=0, font=("Segoe UI", 9))
+            t.insert("1.0", system_prompt)
+            t.configure(state="disabled")
+            t.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+
+        # Parent model
+        parent_model = model.get("parent_model")
+        if parent_model:
+            self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
+            row += 1
+            pm = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 8))
+            pm.grid(row=row, column=0, sticky="ew")
+            row += 1
+            self.ttk.Label(pm, text="PARENT MODEL", style="FieldKey.TLabel").grid(row=0, column=0, sticky="w")
+            self.ttk.Label(pm, text=parent_model, style="FieldVal.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        # Parameters (show/hide toggle)
+        params = model.get("parameters")
+        if params:
+            self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
+            row += 1
+            p_outer = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 8))
+            p_outer.grid(row=row, column=0, sticky="ew")
+            p_outer.columnconfigure(0, weight=1)
+            row += 1
+
+            params_text_widget = self.tk.Text(
+                p_outer, height=6, wrap="word", bg=PANEL_BG, fg=TEXT_DARK,
+                relief="flat", bd=0, font=("Consolas", 9),
+            )
+            params_text_widget.insert("1.0", params)
+            params_text_widget.configure(state="disabled")
+            self._search_params_text = params_text_widget
+
+            def _toggle_params(btn=None, txt=params_text_widget):
+                self._search_params_visible = not self._search_params_visible
+                if self._search_params_visible:
+                    txt.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+                    self._search_params_toggle_btn.configure(text="▼ Parameters")
+                else:
+                    txt.grid_remove()
+                    self._search_params_toggle_btn.configure(text="▶ Parameters")
+
+            self._search_params_toggle_btn = self.ttk.Button(
+                p_outer, text="▶ Parameters", command=_toggle_params, style="Quiet.TButton"
+            )
+            self._search_params_toggle_btn.grid(row=0, column=0, sticky="w")
+
+        # Digest
+        digest = model.get("digest")
+        if digest:
+            self.ttk.Separator(frame, orient="horizontal").grid(row=row, column=0, sticky="ew")
+            row += 1
+            d = self.ttk.Frame(frame, style="Card.TFrame", padding=(14, 8))
+            d.grid(row=row, column=0, sticky="ew")
+            row += 1
+            self.ttk.Label(d, text="DIGEST", style="FieldKey.TLabel").grid(row=0, column=0, sticky="w")
+            short = (digest[:40] + "…") if len(digest) > 40 else digest
+            self.ttk.Label(d, text=short, style="FieldVal.TLabel",
+                           font=("Consolas", 8)).grid(row=1, column=0, sticky="w", pady=(2, 0))
 
     def _clear_detail_panel(self):
-        pass  # implemented in Task 8
+        self._search_selected_model = None
+        if self._search_detail_frame:
+            for widget in self._search_detail_frame.winfo_children():
+                widget.destroy()
+        if self._detail_canvas:
+            self._detail_canvas.grid_remove()
+        if self._detail_vsb:
+            self._detail_vsb.grid_remove()
+        if self._detail_placeholder:
+            self._detail_placeholder.grid()
 
     def _build_search_detail(self, parent):
-        pass  # implemented in Task 8
+        detail_outer = self.ttk.Frame(parent, style="Card.TFrame", padding=0)
+        detail_outer.grid(row=0, column=1, sticky="nsew")
+        detail_outer.columnconfigure(0, weight=1)
+        detail_outer.rowconfigure(1, weight=1)
+
+        self._detail_placeholder = self.ttk.Label(
+            detail_outer, text="Select a model to view details", style="Body.TLabel"
+        )
+        self._detail_placeholder.grid(row=0, column=0, padx=18, pady=18, sticky="nw")
+
+        canvas = self.tk.Canvas(detail_outer, bg=PANEL_BG, highlightthickness=0)
+        canvas.grid(row=1, column=0, sticky="nsew")
+        vsb = self.ttk.Scrollbar(detail_outer, orient="vertical", command=canvas.yview)
+        vsb.grid(row=1, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=vsb.set)
+
+        self._search_detail_frame = self.ttk.Frame(canvas, style="Card.TFrame")
+        win_id = canvas.create_window((0, 0), window=self._search_detail_frame, anchor="nw")
+
+        self._search_detail_frame.bind(
+            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+
+        canvas.grid_remove()
+        vsb.grid_remove()
+        self._detail_canvas = canvas
+        self._detail_vsb = vsb
 
     def _on_tab_changed(self, event):
         notebook = event.widget
