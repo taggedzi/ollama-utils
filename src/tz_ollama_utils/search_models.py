@@ -116,10 +116,10 @@ class ModelSearchCache:
         tags = entry.get("tags") or {}
         show = entry.get("show") or {}
         details = show.get("details") or tags.get("details") or {}
-        modelinfo = show.get("modelinfo") or {}
+        modelinfo = show.get("model_info") or {}
 
         context_window = None
-        ctx_raw = modelinfo.get("llm.context_length") or modelinfo.get("context_length")
+        ctx_raw = next((v for k, v in modelinfo.items() if k.endswith(".context_length")), None)
         if ctx_raw is not None:
             try:
                 context_window = int(ctx_raw)
@@ -138,7 +138,7 @@ class ModelSearchCache:
             "name": name,
             "family": details.get("family"),
             "families": details.get("families") or [],
-            "capabilities": details.get("capabilities") or [],
+            "capabilities": show.get("capabilities") or details.get("capabilities") or [],
             "parameter_size": details.get("parameter_size"),
             "quantization_level": details.get("quantization_level"),
             "format": details.get("format"),
@@ -153,7 +153,7 @@ class ModelSearchCache:
             "template": show.get("template") or None,
             "parent_model": details.get("parent_model") or None,
             "parameters": show.get("parameters") or None,
-            "modelinfo": modelinfo,
+            "model_info": modelinfo,
         }
 
 

@@ -254,7 +254,7 @@ def test_normalize_size_bytes_and_human():
 
 
 def test_normalize_capabilities():
-    m = _cache_with({}, {"details": {"capabilities": ["completion", "tools"]}})
+    m = _cache_with({}, {"capabilities": ["completion", "tools"]})
     assert m["capabilities"] == ["completion", "tools"]
 
 
@@ -264,7 +264,7 @@ def test_normalize_capabilities_empty_when_missing():
 
 
 def test_normalize_context_window_from_modelinfo():
-    m = _cache_with({}, {"modelinfo": {"llm.context_length": 131072}})
+    m = _cache_with({}, {"model_info": {"llama.context_length": 131072}})
     assert m["context_window"] == 131072
 
 
