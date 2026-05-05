@@ -19,13 +19,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            artifact_name: tz-ollama-utils-linux
+            artifact_name: tz-ollama-utils-linux-unsigned
             binary_name: tz-ollama-utils
-            release_asset: tz-ollama-utils-linux.tar.gz
+            release_asset: tz-ollama-utils-linux-unsigned.tar.gz
           - os: windows-2022
-            artifact_name: tz-ollama-utils-windows
+            artifact_name: tz-ollama-utils-windows-unsigned
             binary_name: tz-ollama-utils.exe
-            release_asset: tz-ollama-utils-windows.zip
+            release_asset: tz-ollama-utils-windows-unsigned.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -63,7 +63,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p release
-          cp README.md LICENSE release/
+          cp README.md LICENSE PRIVACY.md SECURITY.md release/
+          cat > release/UNSIGNED-BUILD.txt <<'EOF'
+          This package contains an unsigned build produced by repository automation.
+          Verify the published SHA-256 checksum before use.
+          The repository currently publishes GitHub attestations, but not OS code-signed binaries.
+          EOF
           cp "dist/${{ matrix.binary_name }}" release/
           cd release
           if [[ "${{ runner.os }}" == "Windows" ]]; then

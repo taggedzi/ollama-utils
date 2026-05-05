@@ -8,12 +8,19 @@ TaggedZ's Ollama Utilities: small local utilities for maintaining [Ollama](https
 
 > Disclaimer:
 > This project is an independent utility and is not part of Ollama, is not endorsed by Ollama, and has no affiliation with Ollama.
+>
+> Third-party model licenses, usage restrictions, redistribution terms, and allowed-use policies remain the user's responsibility. That applies to locally installed models, discovered models, and any remote Ollama libraries this tool is pointed at.
 
 This repository currently includes:
 
 - `tz_ollama_utils_update.py`: updates every locally installed Ollama model with `ollama pull`
 - `tz_ollama_utils_test.py`: inventories installed models, captures useful metadata, checks whether each model fits device VRAM, and smoke-tests runnable models
 - `tz_ollama_utils_gui.py`: launches a desktop GUI for running both workflows and reviewing live logs
+
+Policy files:
+
+- [PRIVACY.md](PRIVACY.md): what is sent to Ollama, what is cached locally, and what goes into reports
+- [SECURITY.md](SECURITY.md): supported versions and how to report security issues
 
 ## What This Repo Is For
 
@@ -101,6 +108,12 @@ This script:
 - prints progress and failures as it goes
 - supports clean interruption when launched from the GUI
 
+Important behavior:
+
+- updates act directly on the user's installed Ollama model library
+- the tool does not create a rollback snapshot before pulling updates
+- if a pulled tag changes upstream, this tool does not provide a built-in way to restore the prior local state
+
 ### Test and Inventory Installed Models
 
 ```bash
@@ -134,7 +147,7 @@ Default behavior:
 - smoke-tests completion-capable models with the Ollama HTTP API `/api/generate`
 - tests embedding-capable models with the Ollama HTTP API `/api/embed`
 - falls back to the local `ollama` CLI test path only when the Ollama API is unavailable
-- writes a YAML report to `ollama_model_failures.yaml`
+- writes a YAML report to `model_report.yaml`
 
 Useful CLI options:
 
@@ -191,6 +204,7 @@ GUI notes:
 - if Ollama is not installed or version detection fails, the footer reports the Ollama version as unavailable
 - the Search & Discover disk cache retains a minimized model summary by default; set `TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT=1` only if you explicitly want long text fields like prompts, templates, modelfiles, parameters, and full license text written to `~/.tz_ollama_utils/model_cache.json`
 - Search & Discover model deletion now requires typing the exact model name and shows the exact target plus installed size before `ollama rm` runs
+- Search & Discover deletion and per-model update actions act on the user's installed Ollama library and are not reversible through this tool
 - destructive GUI actions can be disabled entirely with `--disable-destructive-actions` or `TZ_OLLAMA_UTILS_DISABLE_DESTRUCTIVE_ACTIONS=1`
 
 ## YAML Report
@@ -230,6 +244,8 @@ By default, the report does not retain preview text for license, system prompt, 
 - The cache does not persist system prompts, templates, modelfiles, parameters text, or full license text unless `TZ_OLLAMA_UTILS_PERSIST_MODEL_TEXT=1` is set.
 - YAML reports include warnings, skips, failures, attempts, and model summaries, but exported strings are scrubbed to remove absolute paths and redact remote URLs.
 - Metadata previews for long text fields are omitted from reports unless `--include-metadata-previews` is passed.
+
+See [PRIVACY.md](PRIVACY.md) for the exact request payloads, cache contents, and report contents.
 
 ## Notes and Limitations
 
@@ -280,6 +296,8 @@ The generated binary appears under `dist/` as `tz-ollama-utils.exe` on Windows.
 
 The binary launches the GUI entry point and is intended for desktop use. The bundled build includes the project artwork used by the GUI header and applies the branded executable icon on Windows builds.
 
+Local builds produced from this repository are unsigned development builds unless you sign them separately in your own distribution process.
+
 Windows/icon notes:
 
 - `tz_ollama_utils_gui.spec` sets `icon=assets/icons/tz_ollama_utils_icon.ico`, which is the icon Windows Explorer reads from the generated `.exe`.
@@ -294,6 +312,15 @@ GitHub Actions now includes [`.github/workflows/build-release.yml`](.github/work
 - attaches packaged release assets automatically when you push a tag like `v0.2.0`
 - verifies that `tkinter` is available in the build environment before packaging
 - invokes PyInstaller through `python -m PyInstaller` so the build does not depend on a shell-resolved wrapper script
+- publishes `sha256` checksum files for each packaged asset and SBOM
+- publishes GitHub build provenance and SBOM attestations
+- labels packaged workflow and release artifacts as unsigned so they are not confused with code-signed builds
+
+Distribution trust notes:
+
+- current repository-managed binaries are checksum-published and GitHub-attested, but they are not OS code-signed
+- treat local builds and packaged workflow artifacts as unsigned/dev-trust artifacts unless your own release process signs them separately
+- verify the published checksum file before using a packaged asset
 
 Recommended release flow:
 
