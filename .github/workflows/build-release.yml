@@ -201,6 +201,7 @@ jobs:
           PY
 
       - name: Generate release checksums
+        shell: bash
         run: |
           python - <<'PY'
           from hashlib import sha256
