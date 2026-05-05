@@ -1,0 +1,138 @@
+name: Bug report
+description: Report a reproducible problem in the CLI, GUI, packaging, or Ollama integration.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for behavior that is incorrect, broken, or unexpectedly fails.
+
+        Do not include private security details here. For security issues, use the guidance in `SECURITY.md`.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I read the README and this issue is not explained by documented behavior or limitations.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I can reproduce this on the latest release or current `main`.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - CLI update workflow
+        - CLI test and report workflow
+        - Search and discover workflow
+        - Desktop GUI
+        - Packaged binary build or release artifact
+        - Installation or packaging
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install method
+      options:
+        - Run from source
+        - Installed package
+        - Packaged binary
+        - Mixed or unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: tz-ollama-utils version
+      description: Example: `0.7.2`, `main`, or a commit SHA.
+      placeholder: 0.7.2
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, Ubuntu 24.04, macOS 15.4
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Required for source and package installs. If using only a packaged binary, write `packaged binary`.
+      placeholder: 3.12.3
+    validations:
+      required: true
+  - type: input
+    id: ollama
+    attributes:
+      label: Ollama version
+      placeholder: 0.6.8
+    validations:
+      required: true
+  - type: input
+    id: api_base_url
+    attributes:
+      label: Ollama API base URL
+      description: Include whether the target is local or remote if relevant.
+      placeholder: http://127.0.0.1:11434
+    validations:
+      required: false
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU / VRAM context
+      description: Include `nvidia-smi` availability or note if CPU-only.
+      placeholder: RTX 4070 Ti, 12282 MiB, nvidia-smi available
+    validations:
+      required: false
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem and the incorrect behavior.
+      placeholder: The GUI reports success, but the YAML report is never written.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact command, options, or GUI screen path when possible.
+      placeholder: |
+        1. Launch `tz-ollama-utils-gui`
+        2. Open `Test & Report`
+        3. Set timeout to `600`
+        4. Click `Run`
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: A report should be written to the selected path and the run should finish cleanly.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, traceback, or report excerpt
+      description: Paste the smallest useful excerpt. Remove secrets or private host details first.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Include anything that seems environment-specific, model-specific, or timing-dependent.
+    validations:
+      required: false

@@ -1,0 +1,56 @@
+name: Docs or UX issue
+description: Report confusing documentation, unclear copy, or user-experience friction.
+title: "[Docs/UX]: "
+labels:
+  - documentation
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: What kind of issue is this?
+      options:
+        - README or setup docs
+        - Security or privacy docs
+        - CLI help text or error messaging
+        - GUI labels, wording, or flow
+        - Release or packaging instructions
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: Link the file, section, screen, or command if possible.
+      placeholder: README.md - "Test and Inventory Installed Models"
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: What is confusing today?
+      placeholder: The README mentions the API base URL option, but it is not clear whether `/api` is required.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested improvement
+      placeholder: Add one sentence clarifying that both the server root and an explicit `/api` suffix are accepted.
+    validations:
+      required: true
+  - type: textarea
+    id: audience
+    attributes:
+      label: Who is affected?
+      description: New users, package users, GUI-only users, remote-server users, contributors, etc.
+      placeholder: New users running the CLI against a remote Ollama server.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Screenshots or before/after wording can help.
+    validations:
+      required: false

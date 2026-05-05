@@ -1,0 +1,80 @@
+name: Feature request
+description: Propose a new workflow, capability, or quality-of-life improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for new capabilities or meaningful workflow improvements.
+
+        Strong requests explain the user problem first, then the proposed change.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched existing issues and did not find the same request.
+          required: true
+        - label: I reviewed the README and this is not already supported.
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Requested area
+      options:
+        - CLI update workflow
+        - CLI test and report workflow
+        - Search and discover workflow
+        - Desktop GUI
+        - Packaging or release artifacts
+        - Documentation
+        - Project maintenance or contributor workflow
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What is difficult, missing, or unnecessarily manual today?
+      placeholder: I manage multiple remote Ollama endpoints and have to re-enter the same settings each session.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you want, not just the implementation.
+      placeholder: Add saved endpoint profiles in the GUI with a default profile selector.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Example workflow
+      description: Walk through a realistic usage scenario.
+      placeholder: |
+        1. Open the GUI
+        2. Select a saved remote host profile
+        3. Run Test & Report without retyping the API URL
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Document any workarounds or competing ideas.
+      placeholder: I can paste the URL each time, but it is easy to mistype and slows repeated runs.
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: Why this matters
+      description: Explain the payoff, scope, or who benefits.
+      placeholder: This would reduce setup friction for users who test across local and remote Ollama servers.
+    validations:
+      required: true

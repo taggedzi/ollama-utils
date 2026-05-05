@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issue
+    url: https://github.com/taggedzi/tz-ollama-utils/security/policy
+    about: Do not file public issues with vulnerability details. Follow the repository security policy instead.
+  - name: Usage question
+    url: https://github.com/taggedzi/tz-ollama-utils/blob/main/README.md
+    about: Check the README for install, CLI, GUI, and Ollama API usage details before opening a new issue.
