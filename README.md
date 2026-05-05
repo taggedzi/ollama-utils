@@ -1,8 +1,10 @@
-<p align="center">
+<p align="left">
   <img src="assets/icons/tz-ollama-utils.png" alt="tz-ollama-utils logo" width="160">
 </p>
 
 # tz-ollama-utils
+
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange)](https://github.com/taggedzi/tz-ollama-utils) [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://github.com/taggedzi/tz-ollama-utils/blob/main/pyproject.toml) [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) [![Interfaces: CLI%20%2B%20GUI](https://img.shields.io/badge/interfaces-CLI%20%2B%20GUI-0a7ea4)](https://github.com/taggedzi/tz-ollama-utils#usage) [![Build Release Binaries](https://github.com/taggedzi/tz-ollama-utils/actions/workflows/build-release.yml/badge.svg)](https://github.com/taggedzi/tz-ollama-utils/actions/workflows/build-release.yml)
 
 TaggedZ's Ollama Utilities: small local utilities for maintaining [Ollama](https://ollama.com/) model libraries. The project now includes both CLI tools and a desktop GUI so the same workflows can be used interactively or distributed as standalone binaries.
 
