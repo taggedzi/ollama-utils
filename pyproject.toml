@@ -7,7 +7,7 @@ name = "tz-ollama-utils"
 version = "0.7.0"
 description = "Local CLI and GUI utilities for updating, inventorying, smoke-testing, searching, and discovering Ollama models."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
   { name = "Matthew Craig" }
@@ -19,7 +19,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -32,7 +31,6 @@ Homepage = "https://github.com/taggedzi/tz-ollama-utils"
 
 [project.optional-dependencies]
 build = [
-  "cyclonedx-bom==7.3.0",
   "pyinstaller==6.20.0",
 ]
 dev = [
@@ -60,7 +58,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["F401"]

@@ -49,7 +49,7 @@ The reporting is intentionally opinionated:
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - [Ollama](https://ollama.com/) installed and available on `PATH`
 - a running local Ollama server on `http://127.0.0.1:11434`
 - optional: `nvidia-smi` available on `PATH` for VRAM-aware size filtering

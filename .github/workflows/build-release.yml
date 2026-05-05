@@ -36,7 +36,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5.6.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install Linux Tk runtime
         if: runner.os == 'Linux'
@@ -77,14 +77,128 @@ jobs:
             tar -czf "../${{ matrix.release_asset }}" *
           fi
 
-      - name: Generate SBOM
-        run: >
-          cyclonedx-py environment
-          --output-reproducible
-          --spec-version 1.6
-          --output-format JSON
-          --pyproject pyproject.toml
-          --output-file "${{ matrix.artifact_name }}.sbom.json"
+      - name: Generate SPDX SBOM
+        shell: bash
+        env:
+          SBOM_PATH: ${{ matrix.artifact_name }}.spdx.json
+          ARTIFACT_NAME: ${{ matrix.artifact_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import tomllib
+          import uuid
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def spdx_id(value: str) -> str:
+              cleaned = re.sub(r"[^A-Za-z0-9.-]+", "-", value).strip("-.")
+              return f"SPDXRef-{cleaned or 'item'}"
+
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          project = pyproject.get("project", {})
+          project_name = project.get("name", "tz-ollama-utils")
+          project_version = project.get("version", "unknown")
+          artifact_name = os.environ["ARTIFACT_NAME"]
+
+          installed = json.loads(
+              subprocess.check_output(
+                  [sys.executable, "-m", "pip", "list", "--format=json"],
+                  text=True,
+              )
+          )
+          installed.sort(key=lambda pkg: pkg["name"].lower())
+
+          root_id = spdx_id(f"{project_name}-{artifact_name}")
+          packages = [
+              {
+                  "SPDXID": root_id,
+                  "name": project_name,
+                  "versionInfo": project_version,
+                  "downloadLocation": "NOASSERTION",
+                  "filesAnalyzed": False,
+                  "primaryPackagePurpose": "APPLICATION",
+              }
+          ]
+          relationships = [
+              {
+                  "spdxElementId": "SPDXRef-DOCUMENT",
+                  "relationshipType": "DESCRIBES",
+                  "relatedSpdxElement": root_id,
+              }
+          ]
+
+          for pkg in installed:
+              pkg_id = spdx_id(f"{pkg['name']}-{pkg['version']}")
+              packages.append(
+                  {
+                      "SPDXID": pkg_id,
+                      "name": pkg["name"],
+                      "versionInfo": pkg["version"],
+                      "downloadLocation": "NOASSERTION",
+                      "filesAnalyzed": False,
+                  }
+              )
+              relationships.append(
+                  {
+                      "spdxElementId": root_id,
+                      "relationshipType": "CONTAINS",
+                      "relatedSpdxElement": pkg_id,
+                  }
+              )
+
+          created = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          namespace = (
+              f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+              f"{os.environ['GITHUB_RUN_ID']}/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}/"
+              f"sbom/{artifact_name}/{uuid.uuid4()}"
+          )
+
+          document = {
+              "spdxVersion": "SPDX-2.3",
+              "dataLicense": "CC0-1.0",
+              "SPDXID": "SPDXRef-DOCUMENT",
+              "name": f"{artifact_name} build environment SBOM",
+              "documentNamespace": namespace,
+              "creationInfo": {
+                  "created": created,
+                  "creators": [
+                      "Tool: tz-ollama-utils workflow SPDX generator",
+                  ],
+              },
+              "documentDescribes": [root_id],
+              "packages": packages,
+              "relationships": relationships,
+          }
+
+          Path(os.environ["SBOM_PATH"]).write_text(
+              json.dumps(document, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Validate SPDX SBOM shape
+        shell: bash
+        env:
+          SBOM_PATH: ${{ matrix.artifact_name }}.spdx.json
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(Path(os.environ["SBOM_PATH"]).read_text(encoding="utf-8"))
+          assert data.get("spdxVersion") == "SPDX-2.3", "Missing or invalid spdxVersion"
+          assert data.get("SPDXID") == "SPDXRef-DOCUMENT", "Missing document SPDXID"
+          assert isinstance(data.get("packages"), list) and data["packages"], "SPDX packages list is empty"
+          assert isinstance(data.get("relationships"), list) and data["relationships"], "SPDX relationships list is empty"
+          PY
 
       - name: Generate release checksums
         run: |
@@ -94,7 +208,7 @@ jobs:
 
           files = [
               Path("${{ matrix.release_asset }}"),
-              Path("${{ matrix.artifact_name }}.sbom.json"),
+              Path("${{ matrix.artifact_name }}.spdx.json"),
           ]
           output = Path("${{ matrix.artifact_name }}.sha256")
 
@@ -110,7 +224,7 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: |
             ${{ matrix.release_asset }}
-            ${{ matrix.artifact_name }}.sbom.json
+            ${{ matrix.artifact_name }}.spdx.json
             ${{ matrix.artifact_name }}.sha256
           if-no-files-found: error
 
@@ -123,7 +237,7 @@ jobs:
         uses: actions/attest@v4.1.0
         with:
           subject-path: ${{ matrix.release_asset }}
-          sbom-path: ${{ matrix.artifact_name }}.sbom.json
+          sbom-path: ${{ matrix.artifact_name }}.spdx.json
 
       - name: Upload release assets
         if: startsWith(github.ref, 'refs/tags/v')
@@ -131,5 +245,5 @@ jobs:
         with:
           files: |
             ${{ matrix.release_asset }}
-            ${{ matrix.artifact_name }}.sbom.json
+            ${{ matrix.artifact_name }}.spdx.json
             ${{ matrix.artifact_name }}.sha256

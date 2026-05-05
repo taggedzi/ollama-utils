@@ -1,9 +1,7 @@
-import re
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-
-_VERSION_PATTERN = re.compile(r'^version\s*=\s*["\']([^"\']+)["\']\s*$')
+import tomllib
 
 
 def _candidate_pyproject_paths():
@@ -21,22 +19,18 @@ def _read_version_from_pyproject():
         if not path.is_file():
             continue
 
-        in_project_table = False
-        for raw_line in path.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#"):
-                continue
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
 
-            if line.startswith("["):
-                in_project_table = line == "[project]"
-                continue
+        project = data.get("project")
+        if not isinstance(project, dict):
+            continue
 
-            if not in_project_table:
-                continue
-
-            match = _VERSION_PATTERN.match(line)
-            if match:
-                return match.group(1)
+        version_value = project.get("version")
+        if isinstance(version_value, str) and version_value.strip():
+            return version_value.strip()
     return None
 
 
